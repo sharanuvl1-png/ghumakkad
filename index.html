@@ -213,6 +213,12 @@ h3{font:700 18px/1.2 var(--f-display);margin:0}
 .mo .tag2{font:700 9px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
 .gonext{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 
+/* booking */
+.bookgrid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.bookcard{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:16px;display:grid;gap:10px;align-content:start;min-width:0}
+.bookcard p{margin:0;color:var(--muted);font-size:13px}
+.bookcard .links{display:flex;flex-wrap:wrap;gap:6px}
+
 /* planner */
 .planner{display:grid;gap:10px}
 .dates{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
@@ -287,6 +293,7 @@ footer p{max-width:80ch;margin:6px 0}
     <a href="#offbeat"><i style="background:var(--coral)"></i>Offbeat</a>
     <a href="#where"><i style="background:var(--sea)"></i>Where to stay</a>
     <a href="#stays"><i style="background:var(--sea)"></i>Best stays</a>
+    <a href="#book"><i style="background:var(--marigold)"></i>Book &amp; ideas</a>
     <a href="#trip"><i style="background:var(--sky)"></i>My trip <b id="tripCount" style="font-family:var(--f-mono)"></b></a>
   </div>
 </nav>
@@ -397,9 +404,17 @@ footer p{max-width:80ch;margin:6px 0}
     <div class="chips" id="stayLinks" style="margin-top:14px"></div>
   </section>
 
+  <section id="book">
+    <div class="sec-head">
+      <h2><span class="tag k-must">08 · Make it happen</span>Book &amp; get ideas</h2>
+      <p class="note" id="bookNote">Each link opens that site already searching for your place and dates. Nothing is booked from here: prices, payment and the final decision stay with you.</p>
+    </div>
+    <div class="bookgrid" id="bookGrid"></div>
+  </section>
+
   <section id="trip">
     <div class="sec-head">
-      <h2><span class="tag" style="color:var(--sky)">08 · Your plan</span>My trip</h2>
+      <h2><span class="tag" style="color:var(--sky)">09 · Your plan</span>My trip</h2>
       <div class="chips"><button class="btn" type="button" id="optimise">Shortest order</button><button class="btn" type="button" id="clearTrip">Clear</button></div>
     </div>
     <div class="trip" id="tripList"></div>
@@ -985,6 +1000,7 @@ function renderStays() {
   if (!t) g.replaceChildren(el("div", { class: "empty" }, "No stay listings found for this place. Use the search links below to see live options."));
   else g.replaceChildren(...t.items.map(s => stayCard(s, !!t.osm)));
   const p = S.place, c = baseOf(), n = encodeURIComponent(p.name);
+  renderBook();
   $("#stayLinks").replaceChildren(
     el("span", { class: "src", style: "align-self:center" }, "Live prices (opens the site, nothing is booked):"),
     el("a", { class: "btn", target: "_blank", rel: "noopener", href: `https://www.google.com/maps/search/hotels/@${c.lat},${c.lon},14z` }, "Google Maps hotels ↗"),
@@ -1295,6 +1311,63 @@ function errBox(msg, retry) {
   return el("div", { class: "err" }, el("span", {}, msg), el("button", { class: "btn", type: "button", onclick: retry }, "Try again"));
 }
 
+/* ================= book & get ideas ================= */
+function renderBook() {
+  const p = S.place; if (!p) return;
+  const f = $("#dFrom").value, t = $("#dTo").value;
+  const out = t && t > f ? t : (() => { const d = parseD(f); if (!d) return ""; d.setDate(d.getDate() + 1); return iso(d); })();
+  const n = encodeURIComponent(p.name), nq = s => encodeURIComponent(s);
+  const fmt = v => { const d = parseD(v); return d ? d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : ""; };
+  const india = /india/i.test(p.country || "");
+  const L = (label, href) => el("a", { class: "btn", href, target: "_blank", rel: "noopener" }, label + " ↗");
+  const card = (title, blurb, links) => el("article", { class: "bookcard" }, el("h3", {}, title), el("p", {}, blurb), el("div", { class: "links" }, ...links.filter(Boolean)));
+  const dates = f ? `${fmt(f)} to ${fmt(out)}` : "your dates";
+  $("#bookGrid").replaceChildren(
+    card("Getting there", `Flights for ${fmt(f) || "your dates"}, plus trains and buses${india ? " across India" : ""}.`, [
+      L("Google Flights", `https://www.google.com/travel/flights?q=${nq(`Flights to ${p.name} on ${f} returning ${out}`)}`),
+      L("Skyscanner", `https://www.skyscanner.co.in/transport/flights-to/${nq(p.name.toLowerCase())}/`),
+      india && L("IRCTC trains", "https://www.irctc.co.in/nget/train-search"),
+      india && L("ixigo trains", `https://www.ixigo.com/trains`),
+      india && L("redBus", "https://www.redbus.in/"),
+      L("Rome2Rio (all routes)", `https://www.rome2rio.com/s/${n}`),
+    ]),
+    card("Stays for your dates", `Hotels, homestays and hostels for ${dates}. Compare guest ratings before you pay.`, [
+      L("Booking.com", `https://www.booking.com/searchresults.html?${qs({ ss: p.name, checkin: f, checkout: out, group_adults: 2 })}`),
+      L("Google Hotels", `https://www.google.com/travel/search?q=${nq(`hotels in ${p.name} ${f} to ${out}`)}`),
+      L("Airbnb", `https://www.airbnb.co.in/s/${n}/homes?${qs({ checkin: f, checkout: out })}`),
+      L("Agoda", `https://www.agoda.com/search?${qs({ textToSearch: p.name, checkIn: f, checkOut: out })}`),
+      india && L("MakeMyTrip", `https://www.makemytrip.com/hotels/`),
+      L("Hostelworld", `https://www.hostelworld.com/find?search_keywords=${n}`),
+    ]),
+    card("Tours & experiences", "Guided walks, day trips, treks and activities, with reviews from people who went.", [
+      L("GetYourGuide", `https://www.getyourguide.com/s/?q=${n}`),
+      L("Klook", `https://www.klook.com/en-IN/search/result/?query=${n}`),
+      india && L("Thrillophilia", `https://www.google.com/search?q=${nq(`site:thrillophilia.com ${p.name}`)}`),
+      L("Airbnb Experiences", `https://www.airbnb.co.in/s/${n}/experiences`),
+      L("Tripadvisor things to do", `https://www.tripadvisor.in/Search?q=${n}`),
+    ]),
+    card("Getting around", "Cabs, self-drive cars and bikes once you're there.", [
+      india && L("Zoomcar", "https://www.zoomcar.com/"),
+      india && L("Royal Brothers bikes", "https://www.royalbrothers.com/"),
+      india && L("Savaari outstation cabs", "https://www.savaari.com/"),
+      L("Google Maps transit", `https://www.google.com/maps/dir/?api=1&${qs({ destination: `${p.lat},${p.lon}`, travelmode: "transit" })}`),
+    ]),
+    card("Ideas from real travellers", "Recent tips, itineraries and videos from people who've been there.", [
+      L("Reddit tips", `https://www.reddit.com/search/?q=${nq(p.name + " itinerary tips")}`),
+      L("YouTube vlogs", `https://www.youtube.com/results?search_query=${nq(p.name + " travel guide")}`),
+      L("Instagram", `https://www.instagram.com/explore/search/keyword/?q=${nq(p.name)}`),
+      L("Tripadvisor forums", `https://www.tripadvisor.in/Search?q=${nq(p.name + " forum")}`),
+      S.wv && L("Wikivoyage guide", S.wv.url),
+    ]),
+    card("Food to try", "Local dishes and where locals actually eat.", [
+      L("Zomato", `https://www.zomato.com/search?q=${n}`),
+      L("Google Maps restaurants", `https://www.google.com/maps/search/restaurants/@${p.lat},${p.lon},14z`),
+      L("Tripadvisor restaurants", `https://www.tripadvisor.in/Search?q=${nq(p.name + " restaurants")}`),
+      L("Must-try dishes", `https://www.google.com/search?q=${nq("famous local food in " + p.name)}`),
+    ]),
+  );
+}
+
 /* ================= day-by-day planner ================= */
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const parseD = v => { const [y, m, d] = (v || "").split("-").map(Number); return y ? new Date(y, m - 1, d) : null; };
@@ -1310,7 +1383,7 @@ const parseD = v => { const [y, m, d] = (v || "").split("-").map(Number); return
     if (f && (!t || t < f)) { t = new Date(f); if (e?.target.id === "dFrom") { t.setDate(t.getDate() + Math.max(0, S.lastSpan || 2)); } $("#dTo").value = iso(t); }
     $("#dTo").min = $("#dFrom").value;
     store.set("ghum.dates", { from: $("#dFrom").value, to: $("#dTo").value, pace: $("#pace").value });
-    renderPlan(); if (S.clim) renderClimate(S.clim);
+    renderPlan(); renderBook(); if (S.clim) renderClimate(S.clim);
   };
   ["dFrom", "dTo", "pace"].forEach(id => $("#" + id).addEventListener("change", onChange));
 })();
