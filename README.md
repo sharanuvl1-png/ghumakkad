@@ -10,6 +10,9 @@ Search any place to get, in one page:
 - **Which part to stay in**: areas where stays cluster closest to the top sights, plus Wikivoyage's "Sleep" advice and districts
 - **Best stays**: Wikivoyage Budget / Mid-range / Splurge listings and star-rated hotels and homestays from OpenStreetMap, with links out for live prices
 - A **day-by-day plan** for your dates: pick arrive and leave dates, it counts the days and groups nearby sights into each day in the shortest order, with lighter arrival and departure days, the forecast and a Google Maps route per day
+- **Best time to visit**: month-by-month temperatures and wet days from last year's real weather records, with your travel month marked
+- **Works offline** for places you've already opened, and **Share plan** sends your itinerary to WhatsApp
+- Recent searches and tappable "Go next" destinations
 - A 7-day forecast, getting-around tips, and a **My trip** planner that orders your stops and opens the route in Google Maps
 
 All data is fetched live in the browser from free sources with no API keys: Wikivoyage, Wikipedia, OpenStreetMap (Overpass, Nominatim, Photon), Open-Meteo and Google Maps embeds. It never books or pays for anything; booking links just open those sites.
