@@ -381,7 +381,7 @@ footer p{max-width:80ch;margin:6px 0}
       <h2><span class="tag k-off">05 · Off the beaten path</span>Offbeat &amp; hidden spots</h2>
       <div class="chips" id="offChips"></div>
     </div>
-    <p class="note" style="margin:-4px 0 14px">Quieter sights: places with few Wikipedia readers, plus viewpoints, waterfalls, caves, ruins and peaks that locals have mapped on OpenStreetMap but that have no Wikipedia page at all.</p>
+    <p class="note" style="margin:-4px 0 14px">Quieter sights: places with few Wikipedia readers, little-known forts, lakes, temples and viewpoints from Wikidata, and waterfalls, caves, ruins and peaks that locals have mapped on OpenStreetMap.</p>
     <div class="grid" id="offGrid"><div class="skel"></div><div class="skel"></div></div>
   </section>
 
@@ -640,6 +640,7 @@ async function load(p) {
     wv: wikivoyage(p).catch(() => null),
     geo: wikiNearby(p).catch(e => ({ error: e })),
     osm: overpassAll(p, R).catch(e => ({ error: e })),
+    wd: wikidata(p, R).catch(() => null),
     wx: weather(p).catch(() => null),
     clim: climate(p).catch(() => null),
   };
@@ -653,24 +654,43 @@ async function load(p) {
   if (!live()) return;
   buildMust(geo, wv); renderMust(); renderSeeList(wv);
   renderAdvice(wv);
-  let osm = null, osmDone = false;
-  const firstPass = () => {
-    buildOff(geo, null); S.offPending = true; renderOff();
-    buildStays(null, wv); S.staysPending = true; renderStays();
+  // Hidden spots, stays and areas come from three sources (OpenStreetMap, Wikidata, Wikivoyage district pages).
+  // Each one refreshes those sections the moment it arrives, so one slow source never blanks a section.
+  const got = { osm: null, wd: null, wvd: null, left: 3 };
+  const refresh = () => {
+    if (!live()) return;
+    const pending = got.left > 0;
+    const m = mergeSources(got);
+    S.offPending = pending; S.staysPending = pending; S.areasPending = pending;
+    buildOff(geo, m); renderOff();
+    buildStays(m, wv, got.wvd); renderStays();
+    if (got.wvd?.see?.length) addDistrictSee(got.wvd.see, wv);
     renderPlan(); pins.dirty = true; if (!$("#pinmap").hidden) drawPins();
+    buildAreas(m, live).then(ok => { if (ok && live()) { renderAreas(); renderPlan(); } });
   };
-  const t0 = setTimeout(() => { if (!osmDone && live()) firstPass(); }, 1500);
-  osm = await tasks.osm; osmDone = true; clearTimeout(t0);
-  if (!live()) return;
-  S.offPending = false; S.staysPending = false;
-  buildOff(geo, osm); renderOff();
-  buildStays(osm, wv); renderStays();
-  renderPlan();
-  pins.dirty = true; if (!$("#pinmap").hidden) drawPins();
-  await buildAreas(osm, live);
-  if (!live()) return;
-  renderAreas();
-  renderPlan();
+  refresh();
+  const arrive = (k, v) => { got[k] = v; got.left--; refresh(); };
+  tasks.osm.then(v => arrive("osm", v));
+  tasks.wd.then(v => arrive("wd", v));
+  tasks.wv.then(v => wvDistricts(v)).catch(() => null).then(v => arrive("wvd", v));
+}
+function mergeSources(got) {
+  const seen = new Set(), out = { sights: [], stays: [] };
+  const add = (list, arr) => (arr || []).forEach(x => { const k = list + norm(x.name); if (!x.name || seen.has(k)) return; seen.add(k); out[list].push(x); });
+  const osm = got.osm && !got.osm.error ? got.osm : null;
+  add("sights", osm?.sights); add("sights", got.wd?.sights);
+  add("stays", osm?.stays); add("stays", got.wd?.stays);
+  // district guide listings with a location also count as mapped stays, named by their district
+  (got.wvd?.tiers || []).forEach(t => add("stays", t.items.filter(i => i.lat != null).map(i => ({ id: "v" + norm(i.name), name: i.name, lat: i.lat, lon: i.lon, wv: true, tags: { tourism: "hotel", "addr:suburb": i.area, website: i.url || undefined } }))));
+  out.error = got.left <= 0 && !out.sights.length && !out.stays.length ? (got.osm?.error || new Error("no data")) : null;
+  return out;
+}
+function addDistrictSee(see, wv) {
+  const have = new Set([...S.must.map(m => norm(m.name)), ...(S.wvSee || []).map(l => norm(l.name))]);
+  const extra = see.filter(l => !have.has(norm(l.name)));
+  if (!extra.length) return;
+  S.wvSee = [...(S.wvSee || []), ...extra];
+  renderSeeList(wv);
 }
 function radiusKm(p) {
   if (!p.bbox) return 12;
@@ -737,6 +757,33 @@ async function wikivoyage(p) {
   if (!html) return null;
   return parseWV(title, html);
 }
+// Stays and sights listed on a big city's district pages, merged by price band and tagged with the district.
+async function wvDistricts(wv) {
+  if (!wv || !wv.districts?.length) return null;
+  const sleep = sec(wv, "sleep", "stay");
+  const own = sleep ? listings([...sleep.nodes, ...sleep.subs.flatMap(x => x.nodes)]) : [];
+  if (own.length >= 8) return null;
+  const pages = await Promise.allSettled(wv.districts.slice(0, 8).map(t =>
+    mw("en.wikivoyage.org", { action: "parse", page: t, prop: "text", redirects: 1, disableeditsection: 1, disabletoc: 1 })
+      .then(r => r.parse?.text ? parseWV(t, r.parse.text) : null)));
+  const bands = new Map(), see = [];
+  for (const r of pages) {
+    const d = r.status === "fulfilled" && r.value; if (!d) continue;
+    const area = d.title.slice(wv.title.length + 1);
+    const sl = sec(d, "sleep", "stay");
+    if (sl) {
+      const add = (name, items) => { if (!items.length) return; const b = bands.get(name) || []; items.forEach(i => b.push({ ...i, area, guide: d.url })); bands.set(name, b); };
+      add("Other", listings(sl.nodes));
+      sl.subs.forEach(x => add(x.title, listings(x.nodes)));
+    }
+    const sx = sec(d, "see", "see and do");
+    if (sx) listings([...sx.nodes, ...sx.subs.flatMap(x => x.nodes)]).forEach(i => see.push({ ...i, area }));
+  }
+  if (!bands.size && !see.length) return null;
+  const order = n => /budget|cheap/i.test(n) ? 0 : /mid/i.test(n) ? 1 : /splurge|luxury|upscale|high/i.test(n) ? 2 : 3;
+  const tiers = [...bands.entries()].sort((a, b) => order(a[0]) - order(b[0])).map(([name, items]) => ({ name, items }));
+  return { tiers, see, count: tiers.reduce((a, t) => a + t.items.length, 0) };
+}
 function parseWV(title, html) {
   const doc = new DOMParser().parseFromString(html, "text/html");
   doc.querySelectorAll("style,script,sup.reference,.mw-editsection,.noprint,.mw-empty-elt,.thumb,figure,.pagebanner,table.wikitable,.mw-kartographer-container").forEach(n => n.remove());
@@ -746,7 +793,13 @@ function parseWV(title, html) {
     const m = n.classList?.value.match(/mw-heading([2-4])/); return m ? +m[1] : 0;
   };
   const head = n => (n.querySelector?.("h2,h3,h4") || n).textContent.trim();
-  const out = { title, url: `https://en.wikivoyage.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`, lead: [], sections: {} };
+  const out = { title, url: `https://en.wikivoyage.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`, lead: [], sections: {}, districts: [] };
+  // big cities split their listings into district pages ("Dubai/Deira"); remember them
+  const pre = title.replace(/ /g, "_") + "/";
+  for (const a of doc.querySelectorAll('a[href^="/wiki/"]')) {
+    let t; try { t = decodeURIComponent(a.getAttribute("href").slice(6).split("#")[0]); } catch { continue; }
+    if (t.startsWith(pre) && !out.districts.includes(t.replace(/_/g, " "))) out.districts.push(t.replace(/_/g, " "));
+  }
   let sec = null, sub = null;
   let kids = [...root.children];
   while (kids.some(k => k.tagName === "SECTION")) kids = kids.flatMap(k => k.tagName === "SECTION" ? [...k.children] : [k]);
@@ -792,27 +845,34 @@ function listings(nodes) {
 }
 
 /* ================= OpenStreetMap ================= */
-const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
-async function overpass(query) {
-  let last;
-  for (const ep of OVERPASS) {
-    try { return await getJSON(ep, { method: "POST", body: "data=" + encodeURIComponent(query), headers: { "Content-Type": "application/x-www-form-urlencoded" } }, 22000); }
-    catch (e) { last = e; }
-  }
-  throw last;
+const OVERPASS = ["https://maps.mail.ru/osm/tools/overpass/api/interpreter", "https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
+// Ask the fastest mirror first; if it hasn't answered in 8 s, ask the next one too, and take whichever answers first.
+function overpass(query) {
+  const opts = { method: "POST", body: "data=" + encodeURIComponent(query), headers: { "Content-Type": "application/x-www-form-urlencoded" } };
+  return new Promise((resolve, reject) => {
+    let fails = 0, started = 0, done = false, last;
+    const next = () => {
+      if (done || started >= OVERPASS.length) return;
+      const ep = OVERPASS[started++];
+      getJSON(ep, opts, 30000).then(d => { if (!done) { done = true; resolve(d); } })
+        .catch(e => { last = e; if (++fails === OVERPASS.length) reject(last); else next(); });
+    };
+    next();
+    setTimeout(next, 8000); setTimeout(next, 16000);
+  });
 }
 async function overpassAll(p, R) {
   // two small queries in parallel (sights and stays) so one slow answer doesn't hold up the other
-  const r = Math.round(Math.min(R, 25) * 1000), rs = Math.round(Math.min(R, 12) * 1000), c = `${p.lat},${p.lon}`;
+  const r = Math.round(Math.min(R, 20) * 1000), rs = Math.round(Math.min(R, 12) * 1000), c = `${p.lat},${p.lon}`;
   const qSights = `[out:json][timeout:20];
 (
   nwr(around:${r},${c})["tourism"="viewpoint"]["name"];
   nwr(around:${r},${c})["natural"~"^(waterfall|cave_entrance|hot_spring|beach|peak|arch)$"]["name"];
   nwr(around:${r},${c})["waterway"="waterfall"]["name"];
   nwr(around:${r},${c})["historic"~"^(ruins|fort|archaeological_site|castle|city_gate)$"]["name"];
-  nwr(around:${r},${c})["tourism"~"^(attraction|museum)$"]["name"];
+  nwr(around:${r},${c})["tourism"="attraction"]["historic"]["name"];
 );
-out center 300;`;
+out center 250;`;
   const qStays = `[out:json][timeout:20];
 nwr(around:${rs},${c})["tourism"~"^(hotel|guest_house|hostel|resort|motel|apartment|chalet|camp_site|alpine_hut)$"]["name"];
 out center 500;`;
@@ -825,6 +885,69 @@ out center 500;`;
   }).filter(Boolean);
   const STAY = /^(hotel|guest_house|hostel|resort|motel|apartment|chalet|camp_site|alpine_hut)$/;
   return { sights: a.status === "fulfilled" ? conv(a.value).filter(x => !STAY.test(x.tags.tourism || "")) : [], stays: b.status === "fulfilled" ? conv(b.value) : [] };
+}
+
+/* ================= Wikidata (fast backup for hidden spots and notable hotels) ================= */
+const WD_TYPES = {
+  Q34038: ["Waterfall", "nature"], Q35509: ["Cave", "nature"], Q40080: ["Beach", "nature"], Q23397: ["Lake", "nature"],
+  Q8502: ["Mountain", "views"], Q54050: ["Hill", "views"], Q23442: ["Island", "nature"], Q43742: ["Oasis", "nature"],
+  Q8514: ["Desert", "nature"], Q46169: ["National park", "nature"], Q473972: ["Protected area", "nature"], Q22698: ["Park", "nature"],
+  Q1107656: ["Garden", "nature"], Q57821: ["Fort", "heritage"], Q1785071: ["Fort", "heritage"], Q23413: ["Castle", "heritage"],
+  Q109607: ["Ruins", "heritage"], Q839954: ["Archaeological site", "heritage"], Q162875: ["Mausoleum", "heritage"], Q381885: ["Tomb", "heritage"],
+  Q16560: ["Palace", "heritage"], Q4989906: ["Monument", "heritage"], Q5003624: ["Memorial", "heritage"], Q12518: ["Tower", "views"],
+  Q44539: ["Temple", "culture"], Q842402: ["Hindu temple", "culture"], Q32815: ["Mosque", "culture"], Q16970: ["Church", "culture"],
+  Q33506: ["Museum", "culture"], Q207694: ["Art museum", "culture"], Q570116: ["Attraction", "culture"], Q179700: ["Statue", "culture"],
+  Q6017969: ["Viewpoint", "views"], Q1440300: ["Observation tower", "views"], Q39816: ["Valley", "nature"], Q131681: ["Reservoir", "nature"],
+  Q44613: ["Monastery", "culture"], Q37654: ["Market", "culture"],
+};
+const sparql = q => getJSON(`https://query.wikidata.org/sparql?${qs({ query: q, format: "json" })}`, {}, 20000);
+const wdPoint = s => { const m = /Point\(([-\d.]+) ([-\d.]+)\)/.exec(s || ""); return m ? { lon: +m[1], lat: +m[2] } : null; };
+const wdImg = u => u ? u.replace(/^http:/, "https:") + "?width=640" : null;
+async function wikidata(p, R) {
+  const centre = `bd:serviceParam wikibase:center "Point(${p.lon} ${p.lat})"^^geo:wktLiteral .`;
+  const qSights = `SELECT ?i ?iLabel ?iDescription ?t ?loc ?sl ?img ?art WHERE {
+ SERVICE wikibase:around { ?i wdt:P625 ?loc . ${centre} bd:serviceParam wikibase:radius "${Math.round(Math.min(R, 25))}" . }
+ ?i wdt:P31 ?t . VALUES ?t { ${Object.keys(WD_TYPES).map(k => "wd:" + k).join(" ")} }
+ ?i wikibase:sitelinks ?sl .
+ OPTIONAL { ?i wdt:P18 ?img }
+ OPTIONAL { ?art schema:about ?i ; schema:isPartOf <https://en.wikipedia.org/> }
+ SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} LIMIT 400`;
+  const qHotels = `SELECT ?i ?iLabel ?iDescription ?loc ?sl ?img ?web ?art WHERE {
+ SERVICE wikibase:around { ?i wdt:P625 ?loc . ${centre} bd:serviceParam wikibase:radius "${Math.round(Math.min(R, 12))}" . }
+ ?i wdt:P31/wdt:P279* wd:Q27686 .
+ ?i wikibase:sitelinks ?sl .
+ OPTIONAL { ?i wdt:P18 ?img } OPTIONAL { ?i wdt:P856 ?web }
+ OPTIONAL { ?art schema:about ?i ; schema:isPartOf <https://en.wikipedia.org/> }
+ SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} LIMIT 300`;
+  const [a, b] = await Promise.allSettled([sparql(qSights), sparql(qHotels)]);
+  if (a.status === "rejected" && b.status === "rejected") throw a.reason;
+  const rows = r => r.status === "fulfilled" ? r.value?.results?.bindings || [] : [];
+  const v = (r, k) => r[k]?.value;
+  const named = r => { const n = v(r, "iLabel"); return n && !/^Q\d+$/.test(n) ? n : null; };
+  const sights = new Map();
+  for (const r of rows(a)) {
+    const name = named(r), pt = wdPoint(v(r, "loc")), qid = v(r, "i")?.split("/").pop();
+    if (!name || !pt || sights.has(qid)) continue;
+    const [label, group] = WD_TYPES[v(r, "t")?.split("/").pop()] || ["Sight", "culture"];
+    const sl = +v(r, "sl") || 0;
+    sights.set(qid, { id: "w" + qid, wd: true, name, ...pt, label, group, sl, img: wdImg(v(r, "img")), text: v(r, "iDescription") || null,
+      url: v(r, "art") || `https://www.wikidata.org/wiki/${qid}`, tags: {} });
+  }
+  const stays = new Map();
+  for (const r of rows(b)) {
+    const name = named(r), pt = wdPoint(v(r, "loc")), qid = v(r, "i")?.split("/").pop();
+    if (!name || !pt || stays.has(qid)) continue;
+    stays.set(qid, { id: "w" + qid, wd: true, name, ...pt, sl: +v(r, "sl") || 0, img: wdImg(v(r, "img")), text: v(r, "iDescription") || null,
+      osm: v(r, "art") || `https://www.wikidata.org/wiki/${qid}`, tags: { tourism: "hotel", website: v(r, "web") } });
+  }
+  // little-known first: few language editions means few visitors write about it
+  // and no more than 6 of one kind, so a city with hundreds of small mosques or temples still gets a varied list
+  const per = {};
+  const varied = [...sights.values()].filter(s => s.sl < 25).sort((x, y) => (y.text ? 1 : 0) - (x.text ? 1 : 0) || x.sl - y.sl)
+    .filter(s => (per[s.label] = (per[s.label] || 0) + 1) <= 6);
+  return { sights: varied.slice(0, 80), stays: [...stays.values()] };
 }
 
 /* ================= must-see ================= */
@@ -866,12 +989,13 @@ function card(p, opts = {}) {
       p.views != null && p.kind === "must" ? el("div", { style: "display:grid;gap:4px" }, popBar(p.views, S.must[0]?.views, "var(--marigold)"), el("span", { class: "src" }, `${fmtN(p.views)} Wikipedia reads · 30 days`)) : null,
       p.views != null && p.kind === "off" && p.src === "Wikipedia" ? el("span", { class: "src" }, `Only ${fmtN(p.views)} Wikipedia reads in 30 days`) : null,
       p.kind === "off" && p.src === "OpenStreetMap" ? el("span", { class: "src" }, "Mapped on OpenStreetMap · no Wikipedia page") : null,
+      p.kind === "off" && p.src === "Wikidata" ? el("span", { class: "src" }, "Listed on Wikidata · little-known") : null,
     ),
     el("div", { class: "stub" },
       el("span", { class: "dist" }, d != null ? fmtKm(d) + " away" : ""),
       p.lat != null ? el("button", { class: "btn", type: "button", onclick: () => showOnMap({ name: p.name, lat: p.lat, lon: p.lon }, true) }, "Map") : null,
       p.lat != null ? el("button", { class: "btn", type: "button", onclick: () => routeTo(p) }, "Route") : null,
-      p.url ? el("a", { class: "btn", href: p.url, target: "_blank", rel: "noopener" }, p.src === "OpenStreetMap" ? "OSM" : "Read") : null,
+      p.url ? el("a", { class: "btn", href: p.url, target: "_blank", rel: "noopener" }, p.src === "OpenStreetMap" ? "OSM" : p.src === "Wikidata" && !/wikipedia/.test(p.url) ? "Info" : "Read") : null,
       p.lat != null ? el("button", { class: "btn" + (inTrip ? " on" : ""), type: "button", "aria-pressed": inTrip, onclick: e => toggleTrip(p, e.currentTarget) }, inTrip ? "✓ In trip" : "+ Trip") : null,
     ));
 }
@@ -932,11 +1056,12 @@ function buildOff(geo, osm) {
     .forEach(x => { seen.add(norm(x.title)); res.push({ id: x.id, kind: "off", name: x.title, label: x.desc || "Sight", desc: x.desc, img: x.img, lat: x.lat, lon: x.lon, views: x.views, group: wikiGroup(x), src: "Wikipedia", url: `https://en.wikipedia.org/wiki/${encodeURIComponent(x.title.replace(/ /g, "_"))}` }); });
   const sights = osm && !osm.error ? osm.sights : [];
   const peaks = [];
-  sights.filter(s => !s.tags.wikipedia && !s.tags.wikidata && !seen.has(norm(s.name)))
+  sights.filter(s => (s.wd || (!s.tags.wikipedia && !s.tags.wikidata)) && !seen.has(norm(s.name)))
     .forEach(s => {
-      const [label, group] = OSM_LABEL(s.tags);
+      const [label, group] = s.wd ? [s.label, s.group] : OSM_LABEL(s.tags);
       if (s.tags.tourism === "attraction" && !s.tags.historic && !s.tags.natural && s.name.length < 4) return;
-      const it = { id: s.id, kind: "off", name: s.name, label, img: null, lat: s.lat, lon: s.lon, group, src: "OpenStreetMap", url: s.osm, text: s.tags.description || s.tags["description:en"] || null };
+      const it = s.wd ? { id: s.id, kind: "off", name: s.name, label, img: s.img, lat: s.lat, lon: s.lon, group, src: "Wikidata", url: s.url, text: s.text }
+        : { id: s.id, kind: "off", name: s.name, label, img: null, lat: s.lat, lon: s.lon, group, src: "OpenStreetMap", url: s.osm, text: s.tags.description || s.tags["description:en"] || null };
       seen.add(norm(s.name));
       (s.tags.natural === "peak" ? peaks : res).push(it);
     });
@@ -945,7 +1070,7 @@ function buildOff(geo, osm) {
   res.sort((a, b) => km(base, a) - km(base, b));
   S.off = res.slice(0, 36);
   S.osmErr = osm && osm.error;
-  S.offFilter = "all";
+  if (!S.off.some(x => x.group === S.offFilter)) S.offFilter = "all";
 }
 function renderOff() {
   const counts = S.off.reduce((m, x) => (m[x.group] = (m[x.group] || 0) + 1, m), {});
@@ -953,18 +1078,19 @@ function renderOff() {
   $("#offChips").replaceChildren(...groups.map(([k, l]) => el("button", { type: "button", "aria-pressed": S.offFilter === k, onclick: () => { S.offFilter = k; renderOff(); } }, `${l} ${k === "all" ? S.off.length : counts[k]}`)));
   const list = S.off.filter(x => S.offFilter === "all" || x.group === S.offFilter);
   const g = $("#offGrid");
-  if (S.offPending && !list.length) { g.replaceChildren(el("div", { class: "empty" }, "Finding waterfalls, viewpoints, caves and ruins on OpenStreetMap… this can take up to half a minute."), el("div", { class: "skel" })); return; }
+  if (S.offPending && !list.length) { g.replaceChildren(el("div", { class: "empty" }, "Finding waterfalls, viewpoints, caves, forts and ruins…"), el("div", { class: "skel" })); return; }
   if (!list.length) {
-    g.replaceChildren(S.osmErr && !S.off.length ? errBox("Couldn't reach OpenStreetMap for hidden spots. It's sometimes busy.", () => load(S.place))
+    g.replaceChildren(S.osmErr && !S.off.length ? errBox("Couldn't reach the map databases for hidden spots. Tap to try again.", () => load(S.place))
       : el("div", { class: "empty" }, "No offbeat spots found nearby. Try a wider region name, like the district or valley."));
     return;
   }
-  g.replaceChildren(...list.map(p => card(p, { noPhoto: !p.img })), S.offPending ? el("div", { class: "empty" }, "Still loading more hidden spots from OpenStreetMap…") : null);
+  g.replaceChildren(...list.map(p => card(p, { noPhoto: !p.img })), ...(S.offPending ? [el("div", { class: "empty" }, "Still loading more hidden spots…")] : []));
 }
 
 /* ================= stays ================= */
 const TYPE_LABEL = { hotel: "Hotel", guest_house: "Guest house / homestay", hostel: "Hostel", resort: "Resort", motel: "Motel", apartment: "Apartment", chalet: "Chalet", camp_site: "Campsite", alpine_hut: "Mountain hut" };
-function buildStays(osm, wv) {
+function buildStays(osm, wv, wvd) {
+  const keep = S.tiers?.[S.tier]?.name;
   const sleep = sec(wv, "sleep", "stay");
   S.tiers = [];
   if (sleep) {
@@ -972,13 +1098,26 @@ function buildStays(osm, wv) {
     sleep.subs.forEach(sb => { const l = listings(sb.nodes); if (l.length) S.tiers.push({ name: sb.title, items: l }); });
     if (general.length) S.tiers.unshift({ name: S.tiers.length ? "Other" : "Wikivoyage picks", items: general });
   }
-  const osmStays = osm && !osm.error ? osm.stays : [];
+  // big cities: listings from each district's guide, merged by price band
+  (wvd?.tiers || []).forEach(t => {
+    const same = S.tiers.find(x => !x.osm && norm(x.name) === norm(t.name));
+    if (same) same.items.push(...t.items.filter(i => !same.items.some(j => norm(j.name) === norm(i.name))));
+    else S.tiers.push({ name: t.name, items: t.items.slice() });
+  });
+  const all = osm && !osm.error ? osm.stays : [];
+  const osmStays = all.filter(s => !s.wv);
   S.osmStays = osmStays;
-  const starred = osmStays.filter(s => +s.tags.stars >= 3 || /^(4|5)/.test(s.tags.stars || "")).sort((a, b) => (parseFloat(b.tags.stars) || 0) - (parseFloat(a.tags.stars) || 0));
+  const wdAll = osmStays.filter(s => s.wd);
+  const notable = wdAll.filter(s => s.sl > 0).sort((a, b) => b.sl - a.sl);
+  if (notable.length >= 5) S.tiers.push({ name: "Notable hotels (Wikidata)", osm: true, wd: true, items: notable.slice(0, 30) });
+  else if (wdAll.length) S.tiers.push({ name: "Hotels (Wikidata)", osm: true, wd: true, items: wdAll.sort((a, b) => b.sl - a.sl || km(S.centre, a) - km(S.centre, b)).slice(0, 30) });
+  const mapped = osmStays.filter(s => !s.wd);
+  const starred = mapped.filter(s => +s.tags.stars >= 3 || /^(4|5)/.test(s.tags.stars || "")).sort((a, b) => (parseFloat(b.tags.stars) || 0) - (parseFloat(a.tags.stars) || 0));
   if (starred.length) S.tiers.push({ name: "Star-rated (OSM)", osm: true, items: starred.slice(0, 24) });
-  const homes = osmStays.filter(s => /guest_house|hostel|chalet|alpine_hut|camp_site/.test(s.tags.tourism));
+  const homes = mapped.filter(s => /guest_house|hostel|chalet|alpine_hut|camp_site/.test(s.tags.tourism));
   if (homes.length) S.tiers.push({ name: "Homestays & hostels (OSM)", osm: true, items: homes.sort((a, b) => km(S.centre, a) - km(S.centre, b)).slice(0, 24) });
-  S.tier = 0;
+  if (!starred.length && mapped.length) S.tiers.push({ name: "Mapped stays (OSM)", osm: true, items: mapped.sort((a, b) => km(S.centre, a) - km(S.centre, b)).slice(0, 30) });
+  S.tier = Math.max(0, S.tiers.findIndex(t => t.name === keep));
 }
 function stayCard(s, osm) {
   const d = s.lat != null ? km(baseOf(), s) : null;
@@ -990,11 +1129,13 @@ function stayCard(s, osm) {
   return el("article", { class: "stay" },
     el("div", { class: "row" }, el("h3", {}, s.name), stars ? el("span", { class: "stars", "aria-label": `${stars} stars` }, "★".repeat(Math.min(5, Math.round(stars)))) : null),
     el("div", { class: "row" },
-      osm ? el("span", { class: "src" }, TYPE_LABEL[t.tourism] || "Stay") : null,
+      osm ? el("span", { class: "src" }, s.wd ? "Hotel · on Wikipedia/Wikidata" : TYPE_LABEL[t.tourism] || "Stay") : null,
+      !osm && s.area ? el("span", { class: "src" }, s.area) : null,
       !osm && s.price ? el("span", { class: "price" }, s.price) : null,
       d != null ? el("span", { class: "src" }, fmtKm(d) + " from " + (S.base ? "your base" : "centre")) : null),
     !osm && s.text ? el("p", {}, s.text.slice(0, 260) + (s.text.length > 260 ? "…" : "")) : null,
-    osm && (t["addr:street"] || t["addr:suburb"]) ? el("p", {}, [t["addr:housenumber"], t["addr:street"], t["addr:suburb"]].filter(Boolean).join(", ")) : null,
+    osm && s.text ? el("p", {}, s.text) : null,
+    osm && !s.wd && (t["addr:street"] || t["addr:suburb"]) ? el("p", {}, [t["addr:housenumber"], t["addr:street"], t["addr:suburb"]].filter(Boolean).join(", ")) : null,
     el("div", { class: "row", style: "gap:6px;margin-top:4px" },
       el("button", { class: "btn", type: "button", onclick: () => showOnMap(s.lat != null ? { name: s.name, lat: s.lat, lon: s.lon } : { name: s.name, q: mapsQ }, true) }, "Map"),
       el("a", { class: "btn", href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQ)}`, target: "_blank", rel: "noopener" }, "Reviews ↗"),
@@ -1006,10 +1147,12 @@ function renderStays() {
   $("#tiers").replaceChildren(...S.tiers.map((t, i) => el("button", { type: "button", "aria-pressed": S.tier === i, onclick: () => { S.tier = i; renderStays(); } }, `${t.name} ${t.items.length}`)));
   const t = S.tiers[S.tier];
   const g = $("#stayGrid");
-  $("#staysNote").textContent = !t ? "" : t.osm
+  $("#staysNote").textContent = !t ? "" : t.wd
+    ? "Hotels well-known enough to have a Wikipedia or Wikidata entry, most-covered first. Tap Reviews for current guest ratings and prices."
+    : t.osm
     ? "From OpenStreetMap. Star ratings are as tagged by mappers; tap Reviews to see current guest ratings and prices on Google Maps."
-    : `Listed in the Wikivoyage guide to ${S.wv.title}. Prices are as written there and may be out of date; check live prices before you book.`;
-  if (!t && S.staysPending) g.replaceChildren(el("div", { class: "empty" }, "Loading hotels and homestays from OpenStreetMap…"), el("div", { class: "skel" }));
+    : `Listed in the Wikivoyage guide to ${S.wv?.title || S.place.name}${t.items.some(i => i.area) ? " and its district pages" : ""}. Prices are as written there and may be out of date; check live prices before you book.`;
+  if (!t && S.staysPending) g.replaceChildren(el("div", { class: "empty" }, "Loading hotels, homestays and guidebook picks…"), el("div", { class: "skel" }));
   else if (!t) g.replaceChildren(el("div", { class: "empty" }, "No stay listings found for this place. Use the search links below to see live options."));
   else g.replaceChildren(...t.items.map(s => stayCard(s, !!t.osm)));
   const p = S.place, c = baseOf(), n = encodeURIComponent(p.name);
@@ -1024,10 +1167,13 @@ function renderStays() {
 }
 
 /* ================= where to stay (areas) ================= */
+const revMemo = new Map();
 async function buildAreas(osm, live) {
-  S.areas = [];
+  const gen = S.areaGen = (S.areaGen || 0) + 1;
+  const cur = () => live() && gen === S.areaGen;
+  const areas = [];
   const stays = osm && !osm.error ? osm.stays : [];
-  if (stays.length < 4) return;
+  if (stays.length < 4) { S.areas = areas; return true; }
   const top = S.must.slice(0, 6).filter(m => m.lat != null);
   const anchor = top.length ? { lat: top.reduce((a, m) => a + m.lat, 0) / top.length, lon: top.reduce((a, m) => a + m.lon, 0) / top.length } : S.centre;
   const cell = 0.012, cells = new Map();
@@ -1042,35 +1188,44 @@ async function buildAreas(osm, live) {
     c.avg = top.length ? top.reduce((a, m) => a + km(c, m), 0) / top.length : km(c, anchor);
     c.near = top.map(m => ({ m, d: km(c, m) })).sort((a, b) => a.d - b.d).slice(0, 3);
     c.score = Math.log(1 + c.items.length) / (0.6 + c.avg);
-    c.kinds = c.items.reduce((m, s) => (m[s.tags.tourism] = (m[s.tags.tourism] || 0) + 1, m), {});
+    c.kinds = c.items.reduce((m, s) => (m[s.tags.tourism || "hotel"] = (m[s.tags.tourism || "hotel"] || 0) + 1, m), {});
     return c;
   }).sort((a, b) => b.score - a.score);
   const picked = [];
   for (const c of list) { if (picked.every(p => km(p, c) > 1.4)) picked.push(c); if (picked.length === 4) break; }
+  let asked = 0;
   for (let i = 0; i < picked.length; i++) {
-    if (!live()) return;
+    if (!cur()) return false;
     const c = picked[i];
     const tagged = c.items.map(s => s.tags["addr:suburb"] || s.tags["addr:neighbourhood"] || s.tags["addr:quarter"]).filter(Boolean);
     let name = mode(tagged);
+    const mk = `${c.lat.toFixed(2)},${c.lon.toFixed(2)}`;
+    if (!name && revMemo.has(mk)) name = revMemo.get(mk);
     if (!name) {
       try {
-        if (i) await sleep(1100); // Nominatim asks for at most one request a second
+        if (asked++) await sleep(1100); // Nominatim asks for at most one request a second
+        if (!cur()) return false;
         const r = await getJSON(`https://nominatim.openstreetmap.org/reverse?${qs({ lat: c.lat, lon: c.lon, format: "jsonv2", zoom: 16, "accept-language": "en" })}`, {}, 10000);
         const a = r.address || {};
         name = a.neighbourhood || a.quarter || a.suburb || a.city_district || a.hamlet || a.village || a.road;
+        if (name) revMemo.set(mk, name);
       } catch {}
     }
     c.name = name || `Area ${i + 1}`;
-    const dup = S.areas.find(a => norm(a.name) === norm(c.name));
+    const dup = areas.find(a => norm(a.name) === norm(c.name));
     if (dup) { dup.items.push(...c.items); continue; }
-    S.areas.push(c);
+    areas.push(c);
   }
+  if (!cur()) return false;
+  S.areas = areas;
+  return true;
 }
 const mode = arr => { const m = {}; let best = null; for (const x of arr) { m[x] = (m[x] || 0) + 1; if (!best || m[x] > m[best]) best = x; } return best; };
 function renderAreas() {
   const g = $("#areaGrid");
   if (!S.areas.length) {
-    g.replaceChildren(el("div", { class: "empty" }, S.osmErr ? "Couldn't reach OpenStreetMap to map where the stays are. The Wikivoyage advice below still applies." : "Not enough mapped stays here to compare areas. See the Wikivoyage advice below."));
+    if (S.areasPending) { g.replaceChildren(el("div", { class: "empty" }, "Working out which neighbourhoods have the most stays near the top sights…"), el("div", { class: "skel" })); return; }
+    g.replaceChildren(el("div", { class: "empty" }, S.osmErr ? "Couldn't reach the map databases to see where the stays are. The guidebook advice below still applies." : "Not enough mapped stays here to compare areas. See the guidebook advice below."));
     return;
   }
   const best = S.areas[0];
@@ -1359,10 +1514,18 @@ function renderBook() {
       L("Airbnb Experiences", `https://www.airbnb.co.in/s/${n}/experiences`),
       L("Tripadvisor things to do", `https://www.tripadvisor.in/Search?q=${n}`),
     ]),
-    card("Getting around", "Cabs, self-drive cars and bikes once you're there.", [
+    card("Getting around", india ? "Cabs, self-drive cars and bikes once you're there." : "Ride apps, car hire and public transport once you're there. Which ride app works depends on the country.", [
       india && L("Zoomcar", "https://www.zoomcar.com/"),
       india && L("Royal Brothers bikes", "https://www.royalbrothers.com/"),
       india && L("Savaari outstation cabs", "https://www.savaari.com/"),
+      india && L("Ola", "https://www.olacabs.com/"),
+      L("Uber", "https://m.uber.com/looking"),
+      !india && L("Careem (Middle East)", "https://www.careem.com/"),
+      !india && L("Grab (SE Asia)", "https://www.grab.com/"),
+      !india && L("Bolt", "https://bolt.eu/"),
+      !india && L("Rentalcars.com", `https://www.rentalcars.com/search-results?${qs({ location: p.name, puDay: f.slice(8, 10), puMonth: f.slice(5, 7), puYear: f.slice(0, 4) })}`),
+      !india && L("Discover Cars", "https://www.discovercars.com/"),
+      L("Public transport (Moovit)", `https://moovitapp.com/?${qs({ to: p.name, tll: `${p.lat}_${p.lon}` })}`),
       L("Google Maps transit", `https://www.google.com/maps/dir/?api=1&${qs({ destination: `${p.lat},${p.lon}`, travelmode: "transit" })}`),
     ]),
     card("Ideas from real travellers", "Recent tips, itineraries and videos from people who've been there.", [
