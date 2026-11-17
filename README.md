@@ -11,6 +11,7 @@ Search any place to get, in one page:
 - **Best stays**: Wikivoyage Budget / Mid-range / Splurge listings and star-rated hotels and homestays from OpenStreetMap, with links out for live prices
 - A **day-by-day plan** for your dates: pick arrive and leave dates, it counts the days and groups nearby sights into each day in the shortest order, with lighter arrival and departure days, the forecast and a Google Maps route per day
 - **Best time to visit**: month-by-month temperatures and wet days from last year's real weather records, with your travel month marked
+- **Book & get ideas**: one tap to Google Flights, IRCTC, redBus, Booking.com, Airbnb, Agoda, GetYourGuide, Klook, Zomato, Reddit and YouTube, already searching your place and dates (links only, nothing is booked here)
 - **Works offline** for places you've already opened, and **Share plan** sends your itinerary to WhatsApp
 - Recent searches and tappable "Go next" destinations
 - A 7-day forecast, getting-around tips, and a **My trip** planner that orders your stops and opens the route in Google Maps
