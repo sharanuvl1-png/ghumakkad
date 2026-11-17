@@ -91,6 +91,8 @@ button,input,select{font:inherit;color:inherit}
 .quick{display:flex;flex-wrap:wrap;gap:8px}
 .quick button{border:1px solid rgba(255,255,255,.22);background:transparent;color:var(--on-night);padding:7px 12px;border-radius:999px;cursor:pointer;font-size:13px}
 .quick button:hover{background:rgba(255,255,255,.1)}
+.quick .qlabel{font:700 10px/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:#9ea1d8;align-self:center}
+.quick button.recent{border-color:var(--marigold);color:var(--marigold)}
 
 /* ---------- section rail ---------- */
 .rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 58px);z-index:40;background:var(--bg);border-bottom:1px solid var(--line)}
@@ -196,6 +198,21 @@ h3{font:700 18px/1.2 var(--f-display);margin:0}
 .leg button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:18px}
 .total{font:700 13px/1.4 var(--f-mono)}
 
+/* climate */
+.climate{display:grid;gap:12px}
+.months{display:grid;grid-template-columns:repeat(12,minmax(60px,1fr));gap:6px;overflow-x:auto;padding-bottom:4px}
+.mo{display:grid;gap:4px;justify-items:center;text-align:center;font-size:11px;padding:8px 2px;border-radius:12px;background:var(--chip);border:2px solid transparent}
+.mo b{font:700 12px/1 var(--f-mono)}
+.mo .bar{width:10px;height:56px;border-radius:6px;background:var(--line);position:relative;overflow:hidden}
+.mo .bar i{position:absolute;left:0;right:0;bottom:0;border-radius:6px}
+.mo .t{font:700 10px/1.2 var(--f-mono);white-space:nowrap;font-variant-numeric:tabular-nums}
+.mo .r{color:var(--muted);font-family:var(--f-mono);font-size:10px;white-space:nowrap}
+.mo.best{background:color-mix(in srgb,var(--sea) 22%,var(--card));border-color:var(--sea)}
+.mo.avoid{background:color-mix(in srgb,var(--coral) 16%,var(--card))}
+.mo.you{border-color:var(--sky)}
+.mo .tag2{font:700 9px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
+.gonext{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
 /* planner */
 .planner{display:grid;gap:10px}
 .dates{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
@@ -286,6 +303,12 @@ footer p{max-width:80ch;margin:6px 0}
         <div class="src">Forecast: Open-Meteo, local time</div>
       </div>
     </div>
+    <div class="panel climate" style="margin-top:14px">
+      <div class="sec-head" style="margin:0"><h3>Best time to visit</h3><span class="src" id="climSrc"></span></div>
+      <div class="months" id="months"><div class="skel" style="min-height:120px;grid-column:1/-1"></div></div>
+      <p class="note" id="climNote" style="margin:0"></p>
+    </div>
+    <div id="goNext" style="margin-top:14px"></div>
     <div class="facts" id="facts" style="margin-top:14px"></div>
   </section>
 
@@ -328,7 +351,11 @@ footer p{max-width:80ch;margin:6px 0}
         <label for="pace">Pace<select id="pace"><option value="relaxed">Relaxed (3/day)</option><option value="balanced" selected>Balanced (4/day)</option><option value="packed">Packed (6/day)</option></select></label>
         <div class="daycount" id="dayCount" aria-live="polite"></div>
       </div>
-      <p class="src" id="planNote"></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+        <p class="src" id="planNote" style="margin:0;flex:1 1 260px"></p>
+        <button class="btn solid" type="button" id="sharePlan">Share plan</button>
+      </div>
+      <textarea id="planText" readonly hidden rows="8" style="width:100%;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg);color:var(--fg);font:13px/1.4 var(--f-mono)"></textarea>
     </div>
     <div class="days" id="days"></div>
   </section>
@@ -424,12 +451,32 @@ const fmtN = n => n >= 1e5 ? (n / 1e5).toFixed(1).replace(/\.0$/, "") + " lakh" 
 const norm = s => (s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Every answer is also saved on the phone, so places you've opened still work with no signal.
+const DATA_CACHE = "ghum-data-v1";
+const cacheKey = (url, opts) => {
+  if (!opts.body) return url;
+  let h = 0; for (const c of String(opts.body)) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return `${url}?post=${(h >>> 0).toString(36)}`;
+};
+let offlineToast = false;
 async function getJSON(url, opts = {}, timeout = 25000) {
+  const key = cacheKey(url, opts);
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
   try {
     const r = await fetch(url, { ...opts, signal: ctl.signal });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return await r.json();
+    const data = await r.json();
+    try { if (window.caches) caches.open(DATA_CACHE).then(c => c.put(key, new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json", "X-Saved": new Date().toISOString() } }))); } catch {}
+    return data;
+  } catch (e) {
+    try {
+      const hit = window.caches && await (await caches.open(DATA_CACHE)).match(key);
+      if (hit) {
+        if (!offlineToast) { offlineToast = true; const d = hit.headers.get("X-Saved"); toast(`No connection: showing what was saved${d ? " on " + new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : ""}`); setTimeout(() => offlineToast = false, 8000); }
+        return await hit.json();
+      }
+    } catch {}
+    throw e;
   } finally { clearTimeout(t); }
 }
 const qs = o => Object.entries(o).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
@@ -536,16 +583,30 @@ function board(rows) {
   $("#board").replaceChildren(...rows.filter(r => r[1]).map(([k, v]) => el("div", {}, el("dt", {}, k), el("dd", {}, v))));
 }
 const QUICK = ["Hampi", "Spiti Valley", "Udaipur", "Gokarna", "Ziro", "Kyoto", "Lisbon", "Tbilisi"];
-$("#quick").replaceChildren(...QUICK.map(n => el("button", { type: "button", onclick: async () => { const p = await geocode(n); p ? go(p) : toast("Couldn't reach the map search. Check your connection."); } }, n)));
+function renderQuick() {
+  const recent = store.get("ghum.recent", []).filter(r => norm(r.name) !== norm(S.place?.name));
+  const ideas = QUICK.filter(n => norm(n) !== norm(S.place?.name) && !recent.some(r => norm(r.name) === norm(n))).slice(0, Math.max(3, 8 - recent.length));
+  const kids = [];
+  if (recent.length) kids.push(el("span", { class: "qlabel" }, "Recent"), ...recent.slice(0, 6).map(r => el("button", { type: "button", class: "recent", onclick: () => go(r) }, r.name)));
+  kids.push(el("span", { class: "qlabel" }, recent.length ? "Ideas" : "Try"), ...ideas.map(n => el("button", { type: "button", onclick: async () => { const p = await geocode(n); p ? go(p) : toast("Couldn't reach the map search. Check your connection."); } }, n)));
+  $("#quick").replaceChildren(...kids);
+}
+function remember(p) {
+  const list = store.get("ghum.recent", []).filter(r => norm(r.name) !== norm(p.name));
+  list.unshift({ name: p.name, full: p.full, lat: p.lat, lon: p.lon, bbox: p.bbox, country: p.country, state: p.state, kind: p.kind });
+  store.set("ghum.recent", list.slice(0, 8));
+}
 
 /* ================= main load ================= */
 async function load(p) {
   const token = ++S.token;
   const live = () => token === S.token;
   S.place = p; S.centre = { name: "centre of " + p.name, lat: p.lat, lon: p.lon }; S.base = null;
-  S.must = []; S.off = []; S.stays = []; S.areas = []; S.wv = null; S.wx = null;
+  S.must = []; S.off = []; S.stays = []; S.areas = []; S.wv = null; S.wx = null; S.clim = null;
+  $("#months").replaceChildren(el("div", { class: "skel", style: "min-height:120px;grid-column:1/-1" })); $("#climNote").textContent = ""; $("#climSrc").textContent = "";
   $("#days").replaceChildren(el("div", { class: "skel" }), el("div", { class: "skel" }));
   document.title = `${p.name} · Ghumakkad`;
+  remember(p); renderQuick();
   $("#placeTitle").textContent = p.name;
   $("#boardLabel").textContent = "Now boarding · " + (p.country || "");
   flaps(p.name);
@@ -554,7 +615,7 @@ async function load(p) {
   board([["Destination", p.name], ["Coordinates", `${Math.abs(p.lat).toFixed(3)}°${p.lat >= 0 ? "N" : "S"} ${Math.abs(p.lon).toFixed(3)}°${p.lon >= 0 ? "E" : "W"}`]]);
   ["#mustGrid", "#offGrid", "#areaGrid", "#stayGrid"].forEach(s => $(s).replaceChildren(el("div", { class: "skel" }), el("div", { class: "skel" })));
   $("#ovText").replaceChildren(el("div", { class: "skel" }));
-  ["#seeList", "#advice", "#facts", "#stayLinks", "#offChips", "#tiers"].forEach(s => $(s).replaceChildren());
+  ["#seeList", "#advice", "#facts", "#goNext", "#stayLinks", "#offChips", "#tiers"].forEach(s => $(s).replaceChildren());
   $("#staysNote").textContent = "";
   updateBase(); showOnMap({ name: p.full || p.name, q: p.full || p.name });
 
@@ -565,7 +626,9 @@ async function load(p) {
     geo: wikiNearby(p).catch(e => ({ error: e })),
     osm: overpassAll(p, R).catch(e => ({ error: e })),
     wx: weather(p).catch(() => null),
+    clim: climate(p).catch(() => null),
   };
+  tasks.clim.then(c => live() && renderClimate(c));
   tasks.wx.then(w => live() && renderWeather(w));
   tasks.wiki.then(w => live() && renderIntro(w, null));
   tasks.wv.then(v => { if (!live()) return; S.wv = v; renderIntro(null, v); renderFacts(v); });
@@ -658,7 +721,9 @@ function parseWV(title, html) {
   const head = n => (n.querySelector?.("h2,h3,h4") || n).textContent.trim();
   const out = { title, url: `https://en.wikivoyage.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`, lead: [], sections: {} };
   let sec = null, sub = null;
-  for (const n of [...root.children]) {
+  let kids = [...root.children];
+  while (kids.some(k => k.tagName === "SECTION")) kids = kids.flatMap(k => k.tagName === "SECTION" ? [...k.children] : [k]);
+  for (const n of kids) {
     const L = lvl(n);
     if (L === 2) { sec = { title: head(n), nodes: [], subs: [] }; out.sections[sec.title.toLowerCase()] = sec; sub = null; continue; }
     if (L >= 3 && sec) { sub = { title: head(n), nodes: [] }; sec.subs.push(sub); continue; }
@@ -1034,6 +1099,11 @@ function renderIntro(w, v) {
 function renderFacts(v) {
   const box = $("#facts");
   if (!v) { if (!introW) $("#ovText").replaceChildren(el("p", { class: "note" }, "No travel guide found for this place. The map, sights and stays below still work.")); return; }
+  const gn = v.sections["go next"];
+  const nexts = gn ? listings([...gn.nodes, ...gn.subs.flatMap(x => x.nodes)]).slice(0, 10) : [];
+  const near = S.place?.state || S.place?.country || "";
+  $("#goNext").replaceChildren(...(nexts.length ? [el("div", { class: "gonext" }, el("span", { class: "src" }, "Go next from here:"),
+    ...nexts.map(l => el("button", { class: "btn", type: "button", title: l.text || "", onclick: async () => { toast(`Opening ${l.name}…`); const p = await geocode(near ? `${l.name}, ${near}` : l.name) || await geocode(l.name); p ? go(p) : toast(`Couldn't find ${l.name} on the map.`); } }, l.name + " →")))] : []));
   const pick = [["understand", "Understand"], ["get in", "Getting there"], ["get around", "Getting around"], ["eat", "Eat"], ["stay safe", "Stay safe"], ["go next", "Go next"]];
   box.replaceChildren(...pick.map(([k, label]) => {
     const s = v.sections[k]; if (!s) return null;
@@ -1045,6 +1115,53 @@ function renderFacts(v) {
 }
 async function weather(p) {
   return getJSON(`https://api.open-meteo.com/v1/forecast?${qs({ latitude: p.lat, longitude: p.lon, daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max", current: "temperature_2m,weather_code", timezone: "auto", forecast_days: 16 })}`, {}, 12000);
+}
+async function climate(p) {
+  const y = new Date().getFullYear() - 1;
+  return getJSON(`https://archive-api.open-meteo.com/v1/archive?${qs({ latitude: p.lat.toFixed(3), longitude: p.lon.toFixed(3), start_date: `${y}-01-01`, end_date: `${y}-12-31`, daily: "temperature_2m_max,temperature_2m_min,precipitation_sum", timezone: "auto" })}`, {}, 20000)
+    .then(d => ({ year: y, d }));
+}
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function climateMonths(c) {
+  const d = c.d.daily, m = MONTHS.map(() => ({ hi: [], lo: [], wet: 0, n: 0 }));
+  d.time.forEach((t, i) => {
+    const k = +t.slice(5, 7) - 1, x = m[k];
+    if (d.temperature_2m_max[i] != null) x.hi.push(d.temperature_2m_max[i]);
+    if (d.temperature_2m_min[i] != null) x.lo.push(d.temperature_2m_min[i]);
+    if ((d.precipitation_sum[i] ?? 0) >= 1) x.wet++;
+    x.n++;
+  });
+  const avg = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
+  return m.map((x, i) => {
+    const hi = avg(x.hi), lo = avg(x.lo), wet = x.n ? Math.round(x.wet * 30 / x.n) : 0;
+    // comfort: warm but not hot days, few wet days
+    const heat = hi == null ? 3 : hi > 32 ? (hi - 32) * 1.1 : hi < 14 ? (14 - hi) * 0.6 : 0;
+    const cold = lo != null && lo < 2 ? (2 - lo) * 0.5 : 0;
+    const score = Math.max(0, 10 - heat - cold - wet * 0.45);
+    return { i, name: MONTHS[i], hi, lo, wet, score };
+  });
+}
+function renderClimate(c) {
+  const box = $("#months");
+  if (!c?.d?.daily) { box.replaceChildren(el("p", { class: "note", style: "grid-column:1/-1" }, "Climate records are unavailable right now.")); $("#climNote").textContent = ""; $("#climSrc").textContent = ""; return; }
+  const ms = climateMonths(c);
+  const top = Math.max(...ms.map(m => m.score));
+  const best = new Set(ms.slice().sort((a, b) => b.score - a.score).filter(m => m.score >= top - 0.8 && m.score >= 5).slice(0, 6).map(m => m.i));
+  const avoid = new Set(ms.filter(m => m.score < 3.5).map(m => m.i));
+  const tripM = new Set(planDays().map(d => d.getMonth()));
+  const maxWet = Math.max(15, ...ms.map(m => m.wet));
+  box.replaceChildren(...ms.map(m => el("div", { class: "mo" + (best.has(m.i) ? " best" : avoid.has(m.i) ? " avoid" : "") + (tripM.has(m.i) ? " you" : ""), title: `${m.name}: about ${Math.round(m.hi)}° by day, ${Math.round(m.lo)}° at night, ${m.wet} wet days` },
+    el("b", {}, m.name),
+    el("div", { class: "bar", "aria-hidden": "true" }, el("i", { style: `height:${Math.round(100 * m.wet / maxWet)}%;background:${m.wet >= 12 ? "var(--sky)" : "var(--sea)"}` })),
+    el("span", { class: "r" }, `${m.wet} wet d`),
+    el("span", { class: "t" }, m.hi != null ? `${Math.round(m.hi)}°/${Math.round(m.lo)}°` : "–"),
+    best.has(m.i) ? el("span", { class: "tag2 k-stay" }, "Best") : avoid.has(m.i) ? el("span", { class: "tag2 k-off" }, "Tough") : el("span", { class: "tag2" }, " "))));
+  const bestNames = ms.filter(m => best.has(m.i)).map(m => m.name);
+  const yours = [...tripM].map(i => ms[i]);
+  const yourTxt = yours.length ? ` Your dates (${yours.map(m => m.name).join(", ")}): about ${yours.map(m => `${Math.round(m.hi)}° by day with ${m.wet} wet days`).join("; ")}${yours.some(m => best.has(m.i)) ? ", a great time to go." : yours.some(m => avoid.has(m.i)) ? ", a tough time: pack for it." : "."}` : "";
+  $("#climNote").textContent = `Most comfortable: ${bestNames.join(", ") || "no clear peak"}.${yourTxt}`;
+  $("#climSrc").textContent = `From ${c.year} daily weather records (Open-Meteo). One year only, so use as a guide.`;
+  S.clim = c;
 }
 const WX = c => c === 0 ? ["☀️", "Clear"] : c <= 2 ? ["🌤️", "Partly cloudy"] : c === 3 ? ["☁️", "Cloudy"] : c <= 48 ? ["🌫️", "Fog"] : c <= 57 ? ["🌦️", "Drizzle"] : c <= 67 ? ["🌧️", "Rain"] : c <= 77 ? ["❄️", "Snow"] : c <= 82 ? ["🌧️", "Showers"] : c <= 86 ? ["🌨️", "Snow showers"] : ["⛈️", "Thunderstorm"];
 function renderWeather(w) {
@@ -1193,7 +1310,7 @@ const parseD = v => { const [y, m, d] = (v || "").split("-").map(Number); return
     if (f && (!t || t < f)) { t = new Date(f); if (e?.target.id === "dFrom") { t.setDate(t.getDate() + Math.max(0, S.lastSpan || 2)); } $("#dTo").value = iso(t); }
     $("#dTo").min = $("#dFrom").value;
     store.set("ghum.dates", { from: $("#dFrom").value, to: $("#dTo").value, pace: $("#pace").value });
-    renderPlan();
+    renderPlan(); if (S.clim) renderClimate(S.clim);
   };
   ["dFrom", "dTo", "pace"].forEach(id => $("#" + id).addEventListener("change", onChange));
 })();
@@ -1267,7 +1384,9 @@ function renderPlan() {
   const wx = S.wx?.daily;
   const goNext = (() => { const s = sec(S.wv, "go next"); return s ? listings([...s.nodes, ...s.subs.flatMap(x => x.nodes)]) : []; })();
   let gi = 0;
+  const textDays = [];
   $("#planNote").textContent = `${pts.length} places across ${n} day${n > 1 ? "s" : ""}, from ${S.base ? S.base.name : S.place.name + " centre"}. Arrival and departure days are kept light and close to your base. Distances are straight-line; check opening days before you go.`;
+  S.planDays = textDays;
   box.replaceChildren(...days.map((d, i) => {
     const stops = orderLoop(base, plan[i]);
     let prev = base, tot = 0;
@@ -1281,6 +1400,7 @@ function renderPlan() {
     let free = null;
     if (!stops.length) { const g = goNext[gi++]; free = el("div", { class: "tip", style: "margin-top:12px" }, g ? `Free day. Idea for a day trip: ${g.name}${g.text ? ". " + g.text.slice(0, 160) : ""}` : "Free day. Revisit a favourite, or explore the Offbeat list for a day trip."); }
     const way = stops.map(p => `${p.lat},${p.lon}`).join("|");
+    textDays.push({ role, label, stops, free: free?.textContent, wx: wi >= 0 ? `${WX(wx.weather_code[wi])[1]}, ${Math.round(wx.temperature_2m_max[wi])}°` : "" });
     const route = stops.length ? `https://www.google.com/maps/dir/?api=1&${qs({ origin: `${base.lat},${base.lon}`, destination: `${base.lat},${base.lon}`, travelmode: "driving" })}&waypoints=${encodeURIComponent(way)}` : null;
     return el("article", { class: "day" },
       el("header", {}, el("div", {}, el("b", {}, role), el("small", {}, label)), wxCell),
@@ -1288,12 +1408,36 @@ function renderPlan() {
       free,
       stops.length ? el("ol", {}, ...stops.map((p, j) => el("li", { class: p.kind === "off" ? "off" : p.kind === "must" ? "must" : "" },
         el("div", {}, el("b", {}, p.name), el("small", {}, `${p.kind === "off" ? "Offbeat" : p.kind === "must" ? "Must-see" : "Your pick"} · ${fmtKm(legs[j])} from ${j ? "previous" : "base"}`))))) : null,
+      (textDays[textDays.length - 1].route = route, null),
       stops.length ? el("div", { class: "foot" },
         el("span", { class: "dist" }, `≈ ${fmtKm(tot)} round trip`),
         el("button", { class: "btn", type: "button", onclick: () => { stops.forEach(p => { if (!S.trip.some(t => t.id === p.id)) S.trip.push({ id: p.id, name: p.name, lat: p.lat, lon: p.lon, kind: p.kind, place: S.place.name }); }); store.set("ghum.trip", S.trip); renderTrip(); toast(`${role}: ${stops.length} stops added to My trip`); } }, "+ Trip"),
         el("a", { class: "btn solid", href: route, target: "_blank", rel: "noopener" }, "Day route ↗")) : null);
   }));
 }
+
+function planText() {
+  const d = S.planDays || [];
+  if (!d.length) return "";
+  const f = parseD($("#dFrom").value), t = parseD($("#dTo").value);
+  const fmt = x => x.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const lines = [`${S.place.name} trip · ${fmt(f)} to ${fmt(t)} (${d.length} day${d.length > 1 ? "s" : ""})`, `Base: ${S.base ? S.base.name : S.place.name + " centre"}`, ""];
+  d.forEach(x => {
+    lines.push(`${x.role} · ${x.label}${x.wx ? " · " + x.wx : ""}`);
+    if (x.stops.length) { x.stops.forEach((p, i) => lines.push(`${i + 1}. ${p.name}`)); lines.push(`Route: ${x.route}`); }
+    else lines.push(x.free || "Free day");
+    lines.push("");
+  });
+  lines.push(`Planned with Ghumakkad: ${location.origin}${location.pathname}`);
+  return lines.join("\n");
+}
+$("#sharePlan").addEventListener("click", async () => {
+  const txt = planText();
+  if (!txt) return toast("Search a place first, then pick your dates.");
+  if (navigator.share) { try { await navigator.share({ title: `${S.place.name} trip`, text: txt }); return; } catch (e) { if (e.name === "AbortError") return; } }
+  try { await navigator.clipboard.writeText(txt); toast("Plan copied. Paste it into WhatsApp or Notes."); }
+  catch { const ta = $("#planText"); ta.hidden = false; ta.value = txt; ta.focus(); ta.select(); toast("Select all and copy the plan below."); }
+});
 
 /* ================= theme + boot ================= */
 (function theme() {
@@ -1314,8 +1458,9 @@ function fromHash() {
   if (name && ll) { const [lat, lon] = ll.split(",").map(Number); if (isFinite(lat) && isFinite(lon)) return { name, full: name, lat, lon, bbox: null }; }
   return null;
 }
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 (async function boot() {
-  renderTrip(); renderPlan();
+  renderTrip(); renderPlan(); renderQuick();
   const h = fromHash();
   if (h) { q.value = h.name; const g = await geocode(h.name); return load(g && km(g, h) < 30 ? g : h); }
   const last = store.get("ghum.last", null);
