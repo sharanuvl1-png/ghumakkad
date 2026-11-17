@@ -308,6 +308,22 @@ main section{padding-block:22px 4px}
 .day li:hover b{text-decoration:underline}
 .backfab{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(70px + env(safe-area-inset-bottom,0px));z-index:70;border:0;border-radius:999px;padding:12px 16px;background:var(--night);color:#fff;font:600 13px/1 var(--f-body);box-shadow:0 10px 24px rgba(0,0,0,.3);cursor:pointer}
 @media (min-width:1000px){.mapframe,#pinmap{height:min(70vh,600px)}}
+
+/* stay cards: photo, live Google rating panel */
+.stay{padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0}
+.stay .ph{position:relative;aspect-ratio:16/10;background:linear-gradient(135deg,color-mix(in srgb,var(--sea) 35%,var(--card)),color-mix(in srgb,var(--sky) 30%,var(--card)));overflow:hidden}
+.stay .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.stay .ph.none{display:grid;place-items:center}
+.stay .ph.none>span{font:800 46px/1 var(--f-display);color:#fff;opacity:.85}
+.stay .ph.live{aspect-ratio:auto;height:300px;background:var(--chip)}
+.revframe{width:100%;height:100%;border:0;display:block}
+.stay .badges{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;flex-wrap:wrap}
+.stay .badges .price{background:rgba(11,12,43,.82);color:#fff}
+.starb{background:rgba(11,12,43,.82);color:var(--marigold);font:700 12px/1 var(--f-mono);padding:5px 8px;border-radius:8px}
+.stay .sbody{padding:12px 14px 6px;display:grid;gap:6px;align-content:start;flex:1}
+.stay .sfoot{padding:8px 14px 12px;display:grid;gap:8px;border-top:2px dashed var(--line)}
+.stay .links{display:flex;flex-wrap:wrap;gap:4px 12px}
+.stay .links a,.stay .links button{font:600 12px/1.6 var(--f-body);color:var(--muted);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 </style>
 </head>
 <body>
@@ -918,7 +934,9 @@ function listings(nodes) {
     const content = clean(v.querySelector(".listing-content")?.textContent || "");
     const web = [...v.querySelectorAll("a.external, a[href^='http']")].map(a => a.getAttribute("href")).find(h => h && /^https?:/.test(h) && !/wikipedia|wikidata|wikivoyage|geohack|wikimedia/.test(h));
     let full = clean(v.textContent).replace(name, "").replace(/^[\s.,:–-]+/, "");
-    res.push({ name, lat: isFinite(lat) && lat ? lat : null, lon: isFinite(lon) && lon ? lon : null, price, text: content || full.slice(0, 320), url: web || null });
+    const qid = (v.getAttribute("data-wikidata") || "").match(/Q\d+/)?.[0] || (v.id || "").match(/Q\d+/)?.[0]
+      || [...v.querySelectorAll('a[href*="wikidata.org/wiki/Q"]')].map(a => a.getAttribute("href").match(/Q\d+/)?.[0]).find(Boolean) || null;
+    res.push({ name, lat: isFinite(lat) && lat ? lat : null, lon: isFinite(lon) && lon ? lon : null, price, text: content || full.slice(0, 320), url: web || null, qid });
   });
   if (!res.length) {
     wrap.querySelectorAll("li").forEach(li => {
@@ -1208,42 +1226,87 @@ function buildStays(osm, wv, wvd) {
   if (!starred.length && mapped.length) S.tiers.push({ name: "Mapped stays (OSM)", osm: true, items: mapped.sort((a, b) => km(S.centre, a) - km(S.centre, b)).slice(0, 30) });
   S.tier = Math.max(0, S.tiers.findIndex(t => t.name === keep));
 }
+// Photos for stays: Wikidata/Commons pictures for hotels that have one, fetched in one batch per tier.
+const stayImg = new Map();
+const qidOf = s => s.qid || (s.wd && s.id?.slice(1)) || s.tags?.wikidata || null;
+const imgOf = s => s.img || (/^https:\/\//.test(s.tags?.image || "") ? s.tags.image : null) || stayImg.get(qidOf(s)) || null;
+async function fetchStayPhotos(items) {
+  const ids = [...new Set(items.filter(x => !imgOf(x)).map(qidOf).filter(q => q && !stayImg.has(q)))].slice(0, 50);
+  if (!ids.length) return false;
+  ids.forEach(q => stayImg.set(q, null));
+  try {
+    const d = await getJSON(`https://www.wikidata.org/w/api.php?${qs({ action: "wbgetentities", ids: ids.join("|"), props: "claims", format: "json", origin: "*" })}`, {}, 12000);
+    for (const [q, e] of Object.entries(d.entities || {})) {
+      const f = e.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+      if (f) stayImg.set(q, `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(f)}?width=640`);
+    }
+    return true;
+  } catch { return false; }
+}
 function stayCard(s, osm) {
   const d = s.lat != null ? km(baseOf(), s) : null;
   const t = osm ? s.tags : null;
   const stars = t && parseFloat(t.stars);
-  const mapsQ = `${s.name}, ${S.place.name}`;
+  const where = [s.area || t?.["addr:suburb"], S.place.name].filter(Boolean).join(", ");
+  const mapsQ = `${s.name}, ${where}`;
   const id = osm ? s.id : "s" + norm(s.name);
   const inTrip = S.trip.some(x => x.id === id);
-  return el("article", { class: "stay" },
-    el("div", { class: "row" }, el("h3", {}, s.name), stars ? el("span", { class: "stars", "aria-label": `${stars} stars` }, "★".repeat(Math.min(5, Math.round(stars)))) : null),
-    el("div", { class: "row" },
-      osm ? el("span", { class: "src" }, s.wd ? "Hotel · on Wikipedia/Wikidata" : TYPE_LABEL[t.tourism] || "Stay") : null,
-      !osm && s.area ? el("span", { class: "src" }, s.area) : null,
-      !osm && s.price ? el("span", { class: "price" }, s.price) : null,
-      d != null ? el("span", { class: "src" }, fmtKm(d) + " from " + (S.base ? "your base" : "centre")) : null),
-    !osm && s.text ? el("p", {}, s.text.slice(0, 260) + (s.text.length > 260 ? "…" : "")) : null,
-    osm && s.text ? el("p", {}, s.text) : null,
-    osm && !s.wd && (t["addr:street"] || t["addr:suburb"]) ? el("p", {}, [t["addr:housenumber"], t["addr:street"], t["addr:suburb"]].filter(Boolean).join(", ")) : null,
-    el("div", { class: "row", style: "gap:6px;margin-top:4px" },
-      el("button", { class: "btn", type: "button", onclick: () => showOnMap(s.lat != null ? { name: s.name, lat: s.lat, lon: s.lon } : { name: s.name, q: mapsQ }, true) }, "Map"),
-      el("a", { class: "btn", href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQ)}`, target: "_blank", rel: "noopener" }, "Reviews ↗"),
-      (s.url || t?.website) ? el("a", { class: "btn", href: s.url || t.website, target: "_blank", rel: "noopener" }, "Website ↗") : null,
-      s.lat != null ? el("button", { class: "btn", type: "button", onclick: () => setBase({ name: s.name, lat: s.lat, lon: s.lon }) }, "Make my base") : null,
-      s.lat != null ? el("button", { class: "btn" + (inTrip ? " on" : ""), type: "button", onclick: e => toggleTrip({ id, name: s.name, lat: s.lat, lon: s.lon, kind: "stay" }, e.currentTarget) }, inTrip ? "✓ In trip" : "+ Trip") : null));
+  const img = imgOf(s);
+  const ph = el("div", { class: "ph" + (img ? "" : " none") }, img ? null : el("span", {}, (s.name || "?")[0]));
+  if (img) { const im = el("img", { src: img, alt: s.name, loading: "lazy", referrerpolicy: "no-referrer" }); im.onerror = () => { im.remove(); ph.classList.add("none"); ph.append(el("span", {}, (s.name || "?")[0])); }; ph.append(im); }
+  const badges = el("div", { class: "badges" },
+    !osm && s.price ? el("span", { class: "price" }, s.price) : null,
+    stars ? el("span", { class: "starb", "aria-label": `${stars} stars` }, `${"★".repeat(Math.min(5, Math.round(stars)))}`) : null);
+  ph.append(badges);
+  let open = false;
+  const revBtn = el("button", { class: "btn solid", type: "button", onclick: () => {
+    open = !open;
+    if (open) {
+      const fr = el("iframe", { class: "revframe", title: `${s.name} on Google Maps`, loading: "lazy", referrerpolicy: "no-referrer-when-downgrade",
+        src: `https://maps.google.com/maps?${qs({ q: mapsQ, z: 15, output: "embed" })}` });
+      ph.replaceChildren(fr); ph.classList.add("live"); ph.classList.remove("none");
+      revBtn.textContent = "✕ Close reviews";
+    } else { card.replaceWith(stayCard(s, osm)); }
+  } }, "★ Rating & reviews");
+  const L = (label, href) => el("a", { href, target: "_blank", rel: "noopener" }, label);
+  const card = el("article", { class: "stay" }, ph,
+    el("div", { class: "sbody" },
+      el("h3", {}, s.name),
+      el("div", { class: "row" },
+        osm ? el("span", { class: "src" }, s.wd ? "Hotel · Wikipedia/Wikidata" : TYPE_LABEL[t.tourism] || "Stay") : null,
+        s.area ? el("span", { class: "src" }, s.area) : null,
+        d != null ? el("span", { class: "src" }, fmtKm(d) + " from " + (S.base ? "base" : "centre")) : null),
+      !osm && s.text ? el("p", {}, s.text) : null,
+      osm && s.text ? el("p", {}, s.text) : null,
+      osm && !s.wd && (t["addr:street"] || t["addr:suburb"]) ? el("p", {}, [t["addr:housenumber"], t["addr:street"], t["addr:suburb"]].filter(Boolean).join(", ")) : null),
+    el("div", { class: "sfoot" },
+      el("div", { class: "row", style: "gap:6px" }, revBtn,
+        el("button", { class: "btn", type: "button", onclick: () => showOnMap(s.lat != null ? { name: s.name, lat: s.lat, lon: s.lon } : { name: s.name, q: mapsQ }, true) }, "Map"),
+        s.lat != null ? el("button", { class: "btn" + (inTrip ? " on" : ""), type: "button", onclick: e => toggleTrip({ id, name: s.name, lat: s.lat, lon: s.lon, kind: "stay" }, e.currentTarget) }, inTrip ? "✓ In trip" : "+ Trip") : null),
+      el("div", { class: "links" },
+        L("Google reviews ↗", `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQ)}`),
+        L("Tripadvisor ↗", `https://www.tripadvisor.in/Search?q=${encodeURIComponent(mapsQ)}`),
+        L("Booking.com ↗", `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(mapsQ)}`),
+        (s.url || t?.website) ? L("Website ↗", s.url || t.website) : null,
+        s.lat != null ? el("button", { type: "button", onclick: () => setBase({ name: s.name, lat: s.lat, lon: s.lon }) }, "Make my base") : null)));
+  return card;
 }
 function renderStays() {
   $("#tiers").replaceChildren(...S.tiers.map((t, i) => el("button", { type: "button", "aria-pressed": S.tier === i, onclick: () => { S.tier = i; renderStays(); } }, `${t.name} ${t.items.length}`)));
   const t = S.tiers[S.tier];
   const g = $("#stayGrid");
   $("#staysNote").textContent = !t ? "" : t.wd
-    ? "Hotels well-known enough to have a Wikipedia or Wikidata entry, most-covered first. Tap Reviews for current guest ratings and prices."
+    ? "Hotels well-known enough to have a Wikipedia or Wikidata entry, most-covered first. Tap ★ Rating & reviews to see Google's current rating and reviews right on the card."
     : t.osm
     ? "From OpenStreetMap. Star ratings are as tagged by mappers; tap Reviews to see current guest ratings and prices on Google Maps."
     : `Listed in the Wikivoyage guide to ${S.wv?.title || S.place.name}${t.items.some(i => i.area) ? " and its district pages" : ""}. Prices are as written there and may be out of date; check live prices before you book.`;
   if (!t && S.staysPending) g.replaceChildren(el("div", { class: "empty" }, "Loading hotels, homestays and guidebook picks…"), el("div", { class: "skel" }));
   else if (!t) g.replaceChildren(el("div", { class: "empty" }, "No stay listings found for this place. Use the search links below to see live options."));
-  else g.replaceChildren(...t.items.map(s => stayCard(s, !!t.osm)));
+  else {
+    g.replaceChildren(...t.items.map(s => stayCard(s, !!t.osm)));
+    const tok = S.token, tier = S.tier;
+    fetchStayPhotos(t.items).then(ch => { if (ch && tok === S.token && S.tier === tier && S.tiers[tier] === t) g.replaceChildren(...t.items.map(s => stayCard(s, !!t.osm))); });
+  }
   const p = S.place, c = baseOf(), n = encodeURIComponent(p.name);
   renderBook();
   $("#stayLinks").replaceChildren(
@@ -1328,7 +1391,7 @@ function renderAreas() {
     a.near.length ? el("ul", {}, ...a.near.map(n => el("li", {}, `${n.m.name} · ${fmtKm(n.d)}`))) : null,
     el("div", { style: "display:flex;gap:6px;flex-wrap:wrap" },
       el("button", { class: "btn solid", type: "button", onclick: () => setBase({ name: a.name, lat: a.lat, lon: a.lon }) }, "Make my base"),
-      el("button", { class: "btn", type: "button", onclick: () => showOnMap({ name: `hotels near ${a.name}`, q: `hotels near ${a.lat.toFixed(5)},${a.lon.toFixed(5)}` }, true) }, "Stays on map"),
+      el("button", { class: "btn", type: "button", onclick: () => showOnMap({ name: `Hotels in ${a.name}`, q: `hotels in ${a.name}, ${S.place.full || S.place.name}`, near: a }, true) }, "Stays on map"),
       el("button", { class: "btn", type: "button", onclick: () => { S.tiers.unshift({ name: a.name, osm: true, items: a.items.slice().sort((x, y) => (parseFloat(y.tags.stars) || 0) - (parseFloat(x.tags.stars) || 0)) }); S.tier = 0; renderStays(); document.getElementById("stays").scrollIntoView(); } }, "List them")))));
 }
 function renderAdvice(wv) {
@@ -1516,7 +1579,7 @@ const MAP_CHIPS = [["overview", "Overview", null], ["sights", "⭐ Top sights", 
   ["food", "🍽 Food", "restaurants"], ["cafe", "☕ Cafés", "cafes"], ["hotels", "🛏 Hotels", "hotels"], ["atm", "🏧 ATMs", "atm"], ["pharmacy", "💊 Pharmacy", "pharmacy"]];
 function renderMapChips() {
   const box = $("#mapChips"); if (!S.place) return box.replaceChildren();
-  const b = baseOf(), where = S.base ? `${S.base.name}, ${S.place.name}` : (S.place.full || S.place.name);
+  const b = baseOf(), where = S.base ? `${S.base.name}, ${S.place.full || S.place.name}` : (S.place.full || S.place.name);
   box.replaceChildren(...MAP_CHIPS.map(([k, label, term]) => el("button", { type: "button", "aria-pressed": S.mapChip === k, onclick: () => {
     S.mapChip = k; renderMapChips(); setMapTab("g");
     if (!term) showOnMap({ chip: true, name: S.place.full || S.place.name, q: S.place.full || S.place.name });
