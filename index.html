@@ -648,17 +648,29 @@ async function load(p) {
   tasks.wiki.then(w => live() && renderIntro(w, null));
   tasks.wv.then(v => { if (!live()) return; S.wv = v; renderIntro(null, v); renderFacts(v); });
 
-  const [geo, osm, wv] = await Promise.all([tasks.geo, tasks.osm, tasks.wv]);
+  // Each section shows as soon as its own data arrives; OpenStreetMap is the slowest, so nothing waits for it.
+  const [geo, wv] = await Promise.all([tasks.geo, tasks.wv]);
   if (!live()) return;
   buildMust(geo, wv); renderMust(); renderSeeList(wv);
+  renderAdvice(wv);
+  let osm = null, osmDone = false;
+  const firstPass = () => {
+    buildOff(geo, null); S.offPending = true; renderOff();
+    buildStays(null, wv); S.staysPending = true; renderStays();
+    renderPlan(); pins.dirty = true; if (!$("#pinmap").hidden) drawPins();
+  };
+  const t0 = setTimeout(() => { if (!osmDone && live()) firstPass(); }, 1500);
+  osm = await tasks.osm; osmDone = true; clearTimeout(t0);
+  if (!live()) return;
+  S.offPending = false; S.staysPending = false;
   buildOff(geo, osm); renderOff();
   buildStays(osm, wv); renderStays();
-  renderAdvice(wv);
+  renderPlan();
+  pins.dirty = true; if (!$("#pinmap").hidden) drawPins();
   await buildAreas(osm, live);
   if (!live()) return;
   renderAreas();
   renderPlan();
-  pins.dirty = true; if (!$("#pinmap").hidden) drawPins();
 }
 function radiusKm(p) {
   if (!p.bbox) return 12;
@@ -683,8 +695,8 @@ const NOT_SIGHT = /\b(village|census town|town in|city in|capital of|railway sta
 const SIGHT = /\b(temple|mandir|fort|qila|palace|mahal|lake|museum|garden|bagh|waterfall|falls|cave|stepwell|baoli|vav|hill|beach|ruins?|monument|church|cathedral|basilica|chapel|mosque|masjid|dargah|tomb|maqbara|gurdwara|gurudwara|monastery|gompa|stupa|park|sanctuary|reserve|viewpoint|haveli|ghat|shrine|archaeolog\w*|heritage|market|bazaar|island|valley|peak|pass|dunes?|national park|zoo|gallery|memorial|tower|gate|darwaza|castle|square|bay|wetland|bird|forest|lighthouse|bridge over|canal|old town|historic|landmark|kund|tank|chhatri|cenotaph|cemetery|site|minar|pagoda|shrine|abbey|plaza|piazza|quarter|aquarium|botanical|observatory|amphitheatre|theatre|opera)\b/i;
 
 async function wikiNearby(p) {
-  const params = { action: "query", generator: "geosearch", ggscoord: `${p.lat}|${p.lon}`, ggsradius: 10000, ggslimit: 60,
-    prop: "pageviews|pageimages|description|coordinates|pageprops", pvipdays: 30, piprop: "thumbnail", pithumbsize: 640, pilimit: 60, colimit: 60, ppprop: "disambiguation" };
+  const params = { action: "query", generator: "geosearch", ggscoord: `${p.lat}|${p.lon}`, ggsradius: 10000, ggslimit: 50,
+    prop: "pageviews|pageimages|description|coordinates|pageprops", pvipdays: 30, piprop: "thumbnail", pithumbsize: 640, pilimit: 50, colimit: 50, ppprop: "disambiguation" };
   const pages = new Map();
   let cont = {}, i = 0;
   do {
@@ -700,7 +712,7 @@ async function wikiNearby(p) {
       });
     }
     cont = d.continue || null; i++;
-  } while (cont && i < 5);
+  } while (cont && i < 3);
   return [...pages.values()].filter(x => x.lat != null && !x.disamb);
 }
 function isSight(x) {
@@ -784,36 +796,35 @@ const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.k
 async function overpass(query) {
   let last;
   for (const ep of OVERPASS) {
-    try { return await getJSON(ep, { method: "POST", body: "data=" + encodeURIComponent(query), headers: { "Content-Type": "application/x-www-form-urlencoded" } }, 40000); }
+    try { return await getJSON(ep, { method: "POST", body: "data=" + encodeURIComponent(query), headers: { "Content-Type": "application/x-www-form-urlencoded" } }, 22000); }
     catch (e) { last = e; }
   }
   throw last;
 }
 async function overpassAll(p, R) {
-  const r = Math.round(R * 1000), rs = Math.round(Math.min(R, 15) * 1000), c = `${p.lat},${p.lon}`;
-  const query = `[out:json][timeout:35];
+  // two small queries in parallel (sights and stays) so one slow answer doesn't hold up the other
+  const r = Math.round(Math.min(R, 25) * 1000), rs = Math.round(Math.min(R, 12) * 1000), c = `${p.lat},${p.lon}`;
+  const qSights = `[out:json][timeout:20];
 (
   nwr(around:${r},${c})["tourism"="viewpoint"]["name"];
-  nwr(around:${r},${c})["natural"~"^(waterfall|cave_entrance|hot_spring|beach|peak|spring|arch|cliff|volcano)$"]["name"];
+  nwr(around:${r},${c})["natural"~"^(waterfall|cave_entrance|hot_spring|beach|peak|arch)$"]["name"];
   nwr(around:${r},${c})["waterway"="waterfall"]["name"];
-  nwr(around:${r},${c})["historic"~"^(ruins|fort|archaeological_site|castle|monument|city_gate|tomb)$"]["name"];
-  nwr(around:${r},${c})["tourism"~"^(attraction|artwork|museum|picnic_site)$"]["name"];
-)->.sights;
-(
-  nwr(around:${rs},${c})["tourism"~"^(hotel|guest_house|hostel|resort|motel|apartment|chalet|camp_site|alpine_hut)$"]["name"];
-)->.stays;
-.sights out center tags 400;
-.stays out center tags 600;`;
-  const d = await overpass(query);
-  const sights = [], stays = [];
-  for (const e of d.elements || []) {
+  nwr(around:${r},${c})["historic"~"^(ruins|fort|archaeological_site|castle|city_gate)$"]["name"];
+  nwr(around:${r},${c})["tourism"~"^(attraction|museum)$"]["name"];
+);
+out center 300;`;
+  const qStays = `[out:json][timeout:20];
+nwr(around:${rs},${c})["tourism"~"^(hotel|guest_house|hostel|resort|motel|apartment|chalet|camp_site|alpine_hut)$"]["name"];
+out center 500;`;
+  const [a, b] = await Promise.allSettled([overpass(qSights), overpass(qStays)]);
+  if (a.status === "rejected" && b.status === "rejected") throw a.reason;
+  const conv = d => (d?.elements || []).map(e => {
     const lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon, t = e.tags || {};
-    if (lat == null || !t.name) continue;
-    const name = t["name:en"] || t["int_name"] || t.name;
-    const item = { id: `o${e.type[0]}${e.id}`, osm: `https://www.openstreetmap.org/${e.type}/${e.id}`, name, lat, lon, tags: t };
-    (/^(hotel|guest_house|hostel|resort|motel|apartment|chalet|camp_site|alpine_hut)$/.test(t.tourism) ? stays : sights).push(item);
-  }
-  return { sights, stays };
+    if (lat == null || !t.name) return null;
+    return { id: `o${e.type[0]}${e.id}`, osm: `https://www.openstreetmap.org/${e.type}/${e.id}`, name: t["name:en"] || t["int_name"] || t.name, lat, lon, tags: t };
+  }).filter(Boolean);
+  const STAY = /^(hotel|guest_house|hostel|resort|motel|apartment|chalet|camp_site|alpine_hut)$/;
+  return { sights: a.status === "fulfilled" ? conv(a.value).filter(x => !STAY.test(x.tags.tourism || "")) : [], stays: b.status === "fulfilled" ? conv(b.value) : [] };
 }
 
 /* ================= must-see ================= */
@@ -942,12 +953,13 @@ function renderOff() {
   $("#offChips").replaceChildren(...groups.map(([k, l]) => el("button", { type: "button", "aria-pressed": S.offFilter === k, onclick: () => { S.offFilter = k; renderOff(); } }, `${l} ${k === "all" ? S.off.length : counts[k]}`)));
   const list = S.off.filter(x => S.offFilter === "all" || x.group === S.offFilter);
   const g = $("#offGrid");
+  if (S.offPending && !list.length) { g.replaceChildren(el("div", { class: "empty" }, "Finding waterfalls, viewpoints, caves and ruins on OpenStreetMap… this can take up to half a minute."), el("div", { class: "skel" })); return; }
   if (!list.length) {
     g.replaceChildren(S.osmErr && !S.off.length ? errBox("Couldn't reach OpenStreetMap for hidden spots. It's sometimes busy.", () => load(S.place))
       : el("div", { class: "empty" }, "No offbeat spots found nearby. Try a wider region name, like the district or valley."));
     return;
   }
-  g.replaceChildren(...list.map(p => card(p, { noPhoto: !p.img })));
+  g.replaceChildren(...list.map(p => card(p, { noPhoto: !p.img })), S.offPending ? el("div", { class: "empty" }, "Still loading more hidden spots from OpenStreetMap…") : null);
 }
 
 /* ================= stays ================= */
@@ -997,7 +1009,8 @@ function renderStays() {
   $("#staysNote").textContent = !t ? "" : t.osm
     ? "From OpenStreetMap. Star ratings are as tagged by mappers; tap Reviews to see current guest ratings and prices on Google Maps."
     : `Listed in the Wikivoyage guide to ${S.wv.title}. Prices are as written there and may be out of date; check live prices before you book.`;
-  if (!t) g.replaceChildren(el("div", { class: "empty" }, "No stay listings found for this place. Use the search links below to see live options."));
+  if (!t && S.staysPending) g.replaceChildren(el("div", { class: "empty" }, "Loading hotels and homestays from OpenStreetMap…"), el("div", { class: "skel" }));
+  else if (!t) g.replaceChildren(el("div", { class: "empty" }, "No stay listings found for this place. Use the search links below to see live options."));
   else g.replaceChildren(...t.items.map(s => stayCard(s, !!t.osm)));
   const p = S.place, c = baseOf(), n = encodeURIComponent(p.name);
   renderBook();
