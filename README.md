@@ -6,6 +6,8 @@ Search any place to get, in one page:
 
 - An embedded **Google Map**, with a Route button on every place (directions from your base) and an "All pins" overview map
 - **Must-see places**, ranked by Wikipedia readership over the last 30 days, plus the Wikivoyage "See" list
+- **Google Map that follows your plan**: Show on map draws a day's route right on the page by car, on foot or by metro/bus (one leg at a time), tap a stop to see that leg, and quick chips show metro stations, food, cafés, hotels, ATMs and pharmacies near your base
+- **Compact 3D cards**: every list is a swipeable row of raised cards, with Show all to switch back to a grid
 - **Offbeat spots**: quiet Wikipedia sights little-known forts, lakes, temples and viewpoints from Wikidata, plus waterfalls, caves, ruins and peaks mapped on OpenStreetMap
 - **Which part to stay in**: areas where stays cluster closest to the top sights, plus Wikivoyage's "Sleep" advice and districts
 - **Best stays**: Wikivoyage Budget / Mid-range / Splurge listings (pulled from each district's guide for big cities like Dubai), notable hotels from Wikidata, and star-rated hotels and homestays from OpenStreetMap, with links out for live prices

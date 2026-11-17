@@ -227,7 +227,7 @@ h3{font:700 18px/1.2 var(--f-display);margin:0}
 .daycount{flex:1 1 140px;display:grid;align-content:end}
 .daycount b{font:800 34px/1 var(--f-display);font-variant-numeric:tabular-nums}
 .daycount span{font-size:12px;color:var(--muted)}
-.days{display:grid;gap:14px;margin-top:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.days{display:grid;gap:14px;margin-top:6px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 .day{background:var(--card);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-width:0}
 .day header{background:var(--night);color:var(--on-night);padding:12px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center}
 .day header b{font:800 20px/1 var(--f-display)}
@@ -253,6 +253,61 @@ footer p{max-width:80ch;margin:6px 0}
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:13px;z-index:80;box-shadow:var(--shadow)}
 .leaflet-container{font:13px/1.4 var(--f-body)}
 .pin{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+
+/* ---------- compact 3D card rows ---------- */
+:root{--lift:0 1px 0 rgba(255,255,255,.7) inset,0 2px 3px rgba(22,24,74,.06),0 10px 22px -10px rgba(22,24,74,.28),0 26px 40px -28px rgba(22,24,74,.35)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--lift:0 1px 0 rgba(255,255,255,.06) inset,0 2px 3px rgba(0,0,0,.3),0 12px 24px -10px rgba(0,0,0,.55),0 26px 40px -28px rgba(0,0,0,.6)}}
+:root[data-theme="dark"]{--lift:0 1px 0 rgba(255,255,255,.06) inset,0 2px 3px rgba(0,0,0,.3),0 12px 24px -10px rgba(0,0,0,.55),0 26px 40px -28px rgba(0,0,0,.6)}
+.rowx{display:grid;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:min(82%,290px);gap:14px;overflow-x:auto;overflow-y:visible;scroll-snap-type:x mandatory;padding:8px 6px 22px;margin:0 -6px;overscroll-behavior-x:contain;scrollbar-width:none;perspective:1400px}
+.rowx::-webkit-scrollbar{display:none}
+.rowx>*{scroll-snap-align:start}
+.rowx.days{grid-auto-columns:min(86%,320px)}
+.rowx.all{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));overflow:visible;scroll-snap-type:none}
+.rowx:has(>.empty:only-child),.rowx:has(>.err:only-child){display:block}
+.rowx:has(>.empty:first-child:nth-last-child(2)){grid-auto-columns:min(82%,290px)}
+.rowctl{display:flex;gap:6px;align-items:center;margin:-6px 0 2px;justify-content:flex-end}
+.rowctl .n{font:700 11px/1 var(--f-mono);color:var(--muted);margin-right:auto;letter-spacing:.06em}
+.rowctl button{border:1px solid var(--line);background:var(--card);border-radius:999px;height:30px;min-width:30px;padding:0 10px;font:600 12px/1 var(--f-body);cursor:pointer;box-shadow:var(--shadow)}
+.rowctl .arr{padding:0;width:30px;font-size:15px}
+@media (pointer:coarse){.rowctl .arr{display:none}}
+.tix,.stay,.area,.day,.bookcard,.gcard,.districts>div{box-shadow:var(--lift);border:1px solid color-mix(in srgb,var(--line) 60%,transparent);transition:transform .35s cubic-bezier(.2,.7,.2,1),box-shadow .35s;transform-style:preserve-3d;will-change:transform}
+.tix:active,.stay:active,.area:active,.gcard:active{transform:scale(.985)}
+.tilt{transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(-4px)}
+.tix .ph{aspect-ratio:16/10}
+.tix .body{padding:12px 14px 10px}
+.tix p{-webkit-line-clamp:3}
+.tix .stub{padding:8px 12px 10px}
+.stay p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.area{border-top-width:5px}
+main section{padding-block:22px 4px}
+.districts.rowx>div{background:var(--card);border-radius:16px}
+.districts>div>div{border:0!important;padding:0!important;box-shadow:none!important}
+.gcard{background:var(--card);border-radius:18px;padding:14px 16px;display:grid;gap:8px;align-content:start;min-width:0;position:relative;overflow:hidden}
+.gcard::before{content:"";position:absolute;inset:0 0 auto;height:4px;background:linear-gradient(90deg,var(--sky),var(--sea))}
+.gcard h3{font-size:16px}
+.gcard .txt{color:var(--muted);font-size:14px;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.gcard .txt p{margin:0 0 8px}
+.gcard.open .txt{-webkit-line-clamp:unset;display:block}
+.gcard .more{justify-self:start}
+/* map: quick layers and route bar */
+.mapchips{display:flex;gap:6px;overflow-x:auto;padding:8px 10px;border-bottom:1px solid var(--line);scrollbar-width:none}
+.mapchips::-webkit-scrollbar{display:none}
+.mapchips button{flex:none;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 11px;font:600 12px/1 var(--f-body);cursor:pointer}
+.mapchips button[aria-pressed="true"]{background:var(--sky);border-color:var(--sky);color:#fff}
+.routebar{display:grid;gap:8px;padding:10px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--sky) 8%,var(--card))}
+.routebar .modes{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.routebar .modes button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 12px;font:600 13px/1 var(--f-body);cursor:pointer}
+.routebar .modes button[aria-pressed="true"]{background:var(--night);border-color:var(--night);color:#fff}
+.routebar .legs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.routebar .legs::-webkit-scrollbar{display:none}
+.routebar .legs button{flex:none;border:1px dashed var(--line);background:var(--card);border-radius:12px;padding:7px 10px;font:500 12px/1.2 var(--f-body);cursor:pointer;max-width:240px;text-align:left}
+.routebar .legs button[aria-pressed="true"]{border-style:solid;border-color:var(--sky);background:color-mix(in srgb,var(--sky) 14%,var(--card))}
+.routebar .legs b{font-family:var(--f-mono);font-size:11px;color:var(--sky);margin-right:4px}
+.routebar .hint{font-size:12px;color:var(--muted);margin:0}
+.day li{cursor:pointer;border-radius:10px}
+.day li:hover b{text-decoration:underline}
+.backfab{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(70px + env(safe-area-inset-bottom,0px));z-index:70;border:0;border-radius:999px;padding:12px 16px;background:var(--night);color:#fff;font:600 13px/1 var(--f-body);box-shadow:0 10px 24px rgba(0,0,0,.3);cursor:pointer}
+@media (min-width:1000px){.mapframe,#pinmap{height:min(70vh,600px)}}
 </style>
 </head>
 <body>
@@ -316,13 +371,13 @@ footer p{max-width:80ch;margin:6px 0}
       <p class="note" id="climNote" style="margin:0"></p>
     </div>
     <div id="goNext" style="margin-top:14px"></div>
-    <div class="facts" id="facts" style="margin-top:14px"></div>
+    <div class="facts rowx" id="facts" style="margin-top:6px"></div>
   </section>
 
   <section id="map">
     <div class="sec-head">
       <h2><span class="tag" style="color:var(--sky)">02 · Get your bearings</span>Map &amp; distances</h2>
-      <p class="note">Tap <b>Map</b> on any card to see it here, or <b>Route</b> for driving directions from your base.</p>
+      <p class="note">Tap a chip for metro stations, food or hotels nearby. <b>Show on map</b> on a day plan draws that day's route here, by car, on foot or by metro.</p>
     </div>
     <div class="mapbox">
       <div class="maptabs">
@@ -330,6 +385,8 @@ footer p{max-width:80ch;margin:6px 0}
         <button class="t" type="button" id="tabP" aria-pressed="false">All pins</button>
         <span class="src" id="mapCaption" style="margin-left:auto"></span>
       </div>
+      <div class="mapchips" id="mapChips" aria-label="Show on the Google Map"></div>
+      <div class="routebar" id="routeBar" hidden></div>
       <iframe class="mapframe" id="gmap" title="Google Map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
       <div id="pinmap" hidden></div>
       <div class="legend" id="legend" hidden>
@@ -364,7 +421,7 @@ footer p{max-width:80ch;margin:6px 0}
       </div>
       <textarea id="planText" readonly hidden rows="8" style="width:100%;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg);color:var(--fg);font:13px/1.4 var(--f-mono)"></textarea>
     </div>
-    <div class="days" id="days"></div>
+    <div class="days rowx" id="days"></div>
   </section>
 
   <section id="must">
@@ -372,7 +429,7 @@ footer p{max-width:80ch;margin:6px 0}
       <h2><span class="tag k-must">04 · Don't miss</span>Must-see places</h2>
       <p class="note">Ranked by how many people read about each spot on Wikipedia in the last 30 days.</p>
     </div>
-    <div class="grid" id="mustGrid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+    <div class="grid rowx" id="mustGrid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
     <div id="seeList" style="margin-top:18px"></div>
   </section>
 
@@ -382,7 +439,7 @@ footer p{max-width:80ch;margin:6px 0}
       <div class="chips" id="offChips"></div>
     </div>
     <p class="note" style="margin:-4px 0 14px">Quieter sights: places with few Wikipedia readers, little-known forts, lakes, temples and viewpoints from Wikidata, and waterfalls, caves, ruins and peaks that locals have mapped on OpenStreetMap.</p>
-    <div class="grid" id="offGrid"><div class="skel"></div><div class="skel"></div></div>
+    <div class="grid rowx" id="offGrid"><div class="skel"></div><div class="skel"></div></div>
   </section>
 
   <section id="where">
@@ -390,7 +447,7 @@ footer p{max-width:80ch;margin:6px 0}
       <h2><span class="tag k-stay">06 · Base camp</span>Which part to stay in</h2>
       <p class="note">Areas with the most places to stay that are also closest to the must-see sights.</p>
     </div>
-    <div class="grid" id="areaGrid"><div class="skel"></div><div class="skel"></div></div>
+    <div class="grid rowx" id="areaGrid"><div class="skel"></div><div class="skel"></div></div>
     <div id="advice" style="margin-top:14px"></div>
   </section>
 
@@ -400,7 +457,7 @@ footer p{max-width:80ch;margin:6px 0}
       <div class="tiers" id="tiers"></div>
     </div>
     <p class="note" id="staysNote" style="margin:-4px 0 14px"></p>
-    <div class="grid" id="stayGrid"><div class="skel"></div><div class="skel"></div></div>
+    <div class="grid rowx" id="stayGrid"><div class="skel"></div><div class="skel"></div></div>
     <div class="chips" id="stayLinks" style="margin-top:14px"></div>
   </section>
 
@@ -409,7 +466,7 @@ footer p{max-width:80ch;margin:6px 0}
       <h2><span class="tag k-must">08 · Make it happen</span>Book &amp; get ideas</h2>
       <p class="note" id="bookNote">Each link opens that site already searching for your place and dates. Nothing is booked from here: prices, payment and the final decision stay with you.</p>
     </div>
-    <div class="bookgrid" id="bookGrid"></div>
+    <div class="bookgrid rowx" id="bookGrid"></div>
   </section>
 
   <section id="trip">
@@ -432,6 +489,7 @@ footer p{max-width:80ch;margin:6px 0}
 </footer>
 
 <div class="toast" id="toast" role="status" hidden></div>
+<button class="backfab" id="backFab" type="button" hidden>↩ Back to where I was</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -632,7 +690,7 @@ async function load(p) {
   $("#ovText").replaceChildren(el("div", { class: "skel" }));
   ["#seeList", "#advice", "#facts", "#goNext", "#stayLinks", "#offChips", "#tiers"].forEach(s => $(s).replaceChildren());
   $("#staysNote").textContent = "";
-  updateBase(); showOnMap({ name: p.full || p.name, q: p.full || p.name });
+  S.mapChip = "overview"; back.y = null; $("#backFab").hidden = true; updateBase(); showOnMap({ chip: true, name: p.full || p.name, q: p.full || p.name });
 
   const R = radiusKm(p);
   const tasks = {
@@ -650,7 +708,7 @@ async function load(p) {
   tasks.wv.then(v => { if (!live()) return; S.wv = v; renderIntro(null, v); renderFacts(v); });
 
   // Each section shows as soon as its own data arrives; OpenStreetMap is the slowest, so nothing waits for it.
-  const [geo, wv] = await Promise.all([tasks.geo, tasks.wv]);
+  let [geo, wv] = await Promise.all([tasks.geo, tasks.wv]);
   if (!live()) return;
   buildMust(geo, wv); renderMust(); renderSeeList(wv);
   renderAdvice(wv);
@@ -672,7 +730,35 @@ async function load(p) {
   const arrive = (k, v) => { got[k] = v; got.left--; refresh(); };
   tasks.osm.then(v => arrive("osm", v));
   tasks.wd.then(v => arrive("wd", v));
+  // landmarks a few km from the centre (Burj Khalifa from old Dubai, say) join the must-see ranking once known
+  tasks.wd.then(v => v?.famous?.length ? famousPages(v.famous) : []).catch(() => []).then(extra => {
+    if (!live() || !extra.length) return;
+    const have = new Set((Array.isArray(geo) ? geo : []).map(x => norm(x.title)));
+    const add = extra.filter(x => !have.has(norm(x.title)));
+    if (!add.length) return;
+    geo = [...(Array.isArray(geo) ? geo : []), ...add];
+    buildMust(geo, wv); renderMust(); renderSeeList(wv); refresh();
+  });
   tasks.wv.then(v => wvDistricts(v)).catch(() => null).then(v => arrive("wvd", v));
+}
+// Wikipedia reads for Wikidata's famous sights, so they rank on the same scale as the nearby pages
+async function famousPages(famous) {
+  const titles = famous.map(f => { try { return decodeURIComponent(f.url.split("/wiki/")[1]).replace(/_/g, " "); } catch { return null; } }).filter(Boolean);
+  if (!titles.length) return [];
+  const pages = new Map();
+  let cont = {}, i = 0;
+  do {
+    const d = await mw("en.wikipedia.org", { action: "query", titles: titles.join("|"), redirects: 1, prop: "pageviews|pageimages|description|coordinates", pvipdays: 30, piprop: "thumbnail", pithumbsize: 640, pilimit: 50, colimit: 50, ...cont });
+    for (const pg of d.query?.pages || []) {
+      if (pg.missing) continue;
+      const cur = pages.get(pg.pageid) || {};
+      const pv = pg.pageviews ? Object.values(pg.pageviews).reduce((a, b) => a + (b || 0), 0) : undefined;
+      pages.set(pg.pageid, { id: "w" + pg.pageid, title: pg.title, famous: true, desc: pg.description ?? cur.desc, img: pg.thumbnail?.source ?? cur.img,
+        lat: pg.coordinates?.[0]?.lat ?? cur.lat, lon: pg.coordinates?.[0]?.lon ?? cur.lon, views: pv ?? cur.views });
+    }
+    cont = d.continue || null; i++;
+  } while (cont && i < 6);
+  return [...pages.values()].filter(x => x.lat != null);
 }
 function mergeSources(got) {
   const seen = new Set(), out = { sights: [], stays: [] };
@@ -728,11 +814,11 @@ async function wikiNearby(p) {
         id: "w" + pg.pageid, title: pg.title,
         desc: pg.description ?? cur.desc, img: pg.thumbnail?.source ?? cur.img,
         lat: pg.coordinates?.[0]?.lat ?? cur.lat, lon: pg.coordinates?.[0]?.lon ?? cur.lon,
-        views: pv ?? cur.views ?? 0, disamb: pg.pageprops?.disambiguation !== undefined || cur.disamb,
+        views: pv ?? cur.views, disamb: pg.pageprops?.disambiguation !== undefined || cur.disamb,
       });
     }
     cont = d.continue || null; i++;
-  } while (cont && i < 3);
+  } while (cont && i < 10);
   return [...pages.values()].filter(x => x.lat != null && !x.disamb);
 }
 function isSight(x) {
@@ -898,7 +984,7 @@ const WD_TYPES = {
   Q44539: ["Temple", "culture"], Q842402: ["Hindu temple", "culture"], Q32815: ["Mosque", "culture"], Q16970: ["Church", "culture"],
   Q33506: ["Museum", "culture"], Q207694: ["Art museum", "culture"], Q570116: ["Attraction", "culture"], Q179700: ["Statue", "culture"],
   Q6017969: ["Viewpoint", "views"], Q1440300: ["Observation tower", "views"], Q39816: ["Valley", "nature"], Q131681: ["Reservoir", "nature"],
-  Q44613: ["Monastery", "culture"], Q37654: ["Market", "culture"],
+  Q44613: ["Monastery", "culture"], Q37654: ["Market", "culture"], Q483453: ["Fountain", "culture"], Q11303: ["Skyscraper", "views"],
 };
 const sparql = q => getJSON(`https://query.wikidata.org/sparql?${qs({ query: q, format: "json" })}`, {}, 20000);
 const wdPoint = s => { const m = /Point\(([-\d.]+) ([-\d.]+)\)/.exec(s || ""); return m ? { lon: +m[1], lat: +m[2] } : null; };
@@ -944,17 +1030,20 @@ async function wikidata(p, R) {
   }
   // little-known first: few language editions means few visitors write about it
   // and no more than 6 of one kind, so a city with hundreds of small mosques or temples still gets a varied list
+  // famous ones (many language editions, with an English article) are must-see candidates for big cities,
+  // where the 50 Wikipedia pages nearest the centre can miss landmarks a few km away
+  const famous = [...sights.values()].filter(s => s.sl >= 25 && /wikipedia\.org/.test(s.url)).sort((x, y) => y.sl - x.sl).slice(0, 20);
   const per = {};
-  const varied = [...sights.values()].filter(s => s.sl < 25).sort((x, y) => (y.text ? 1 : 0) - (x.text ? 1 : 0) || x.sl - y.sl)
+  const varied = [...sights.values()].filter(s => s.sl < 25 && s.label !== "Skyscraper").sort((x, y) => (y.text ? 1 : 0) - (x.text ? 1 : 0) || x.sl - y.sl)
     .filter(s => (per[s.label] = (per[s.label] || 0) + 1) <= 6);
-  return { sights: varied.slice(0, 80), stays: [...stays.values()] };
+  return { sights: varied.slice(0, 80), stays: [...stays.values()], famous };
 }
 
 /* ================= must-see ================= */
 function buildMust(geo, wv) {
   const list = Array.isArray(geo) ? geo : [];
   const self = norm(S.place.name);
-  const cand = list.filter(x => isSight(x) && norm(x.title) !== self).sort((a, b) => b.views - a.views);
+  const cand = list.filter(x => (x.famous || isSight(x)) && norm(x.title) !== self).sort((a, b) => (b.views ?? -1) - (a.views ?? -1));
   const see = sec(wv, "see", "see and do", "attractions");
   const wvSee = see ? listings([...see.nodes, ...see.subs.flatMap(s => s.nodes)]) : [];
   const wvByName = new Map(wvSee.map(l => [norm(l.name), l]));
@@ -963,7 +1052,7 @@ function buildMust(geo, wv) {
     return { id: x.id, kind: "must", rank: i + 1, name: x.title, desc: x.desc, text: wvl?.text, img: x.img, lat: x.lat, lon: x.lon, views: x.views,
       url: `https://en.wikipedia.org/wiki/${encodeURIComponent(x.title.replace(/ /g, "_"))}`, src: "Wikipedia" };
   });
-  S.mustCut = S.must.length ? S.must[Math.min(S.must.length - 1, 7)].views : 0;
+  S.mustCut = S.must.length ? S.must[Math.min(S.must.length - 1, 7)].views ?? 0 : 0;
   const same = (a, b) => { a = norm(a); b = norm(b); return a && b && (a === b || a.includes(b) || b.includes(a)); };
   S.wvSee = wvSee.filter(l => !S.must.some(m => same(m.name, l.name)));
   S.geoErr = geo && geo.error;
@@ -1014,7 +1103,7 @@ function renderSeeList(wv) {
   if (!items.length) return box.replaceChildren();
   box.replaceChildren(el("div", { class: "panel", style: "display:grid;gap:12px" },
     el("div", { class: "sec-head", style: "margin:0" }, el("h3", {}, "More from the Wikivoyage 'See' list"), el("a", { class: "src", href: wv.url + "#See", target: "_blank", rel: "noopener" }, "Wikivoyage · " + wv.title + " ↗")),
-    el("div", { class: "districts" }, ...items.map(l => el("div", {},
+    el("div", { class: "districts rowx", "data-row": "more sights" }, ...items.map(l => el("div", {},
       el("b", {}, l.name), l.text ? el("p", {}, l.text.slice(0, 220) + (l.text.length > 220 ? "…" : "")) : null,
       el("div", { style: "display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" },
         el("button", { class: "btn", type: "button", onclick: () => showOnMap(l.lat != null ? { name: l.name, lat: l.lat, lon: l.lon } : { name: l.name, q: `${l.name}, ${S.place.name}` }, true) }, "Map"),
@@ -1051,8 +1140,8 @@ function buildOff(geo, osm) {
   const res = [], seen = new Set(mustNames);
   const geoList = Array.isArray(geo) ? geo : [];
   const self = norm(S.place.name);
-  geoList.filter(x => isSight(x) && !mustNames.has(norm(x.title)) && norm(x.title) !== self && x.views <= Math.max(S.mustCut * 0.6, 50))
-    .sort((a, b) => a.views - b.views).slice(0, 14)
+  geoList.filter(x => !x.famous && isSight(x) && !mustNames.has(norm(x.title)) && norm(x.title) !== self && (x.views ?? 0) <= Math.max(S.mustCut * 0.6, 50))
+    .sort((a, b) => (a.views ?? 0) - (b.views ?? 0)).slice(0, 14)
     .forEach(x => { seen.add(norm(x.title)); res.push({ id: x.id, kind: "off", name: x.title, label: x.desc || "Sight", desc: x.desc, img: x.img, lat: x.lat, lon: x.lon, views: x.views, group: wikiGroup(x), src: "Wikipedia", url: `https://en.wikipedia.org/wiki/${encodeURIComponent(x.title.replace(/ /g, "_"))}` }); });
   const sights = osm && !osm.error ? osm.sights : [];
   const peaks = [];
@@ -1294,7 +1383,9 @@ function renderFacts(v) {
     let ps = paras([...s.nodes, ...s.subs.flatMap(x => x.nodes)], 3);
     if (k === "go next" && !ps.length) ps = listings(s.nodes).slice(0, 6).map(l => `${l.name}${l.text ? ": " + l.text.slice(0, 140) : ""}`);
     if (!ps.length) return null;
-    return el("details", { open: k === "get around" }, el("summary", {}, label), ...ps.map(t => el("p", {}, t)));
+    const c = el("article", { class: "gcard" }, el("h3", {}, label), el("div", { class: "txt" }, ...ps.map(t => el("p", {}, t))));
+    c.append(el("button", { class: "btn more", type: "button", onclick: e => { const o = c.classList.toggle("open"); e.currentTarget.textContent = o ? "Show less" : "Read more"; } }, "Read more"));
+    return c;
   }).filter(Boolean));
 }
 async function weather(p) {
@@ -1369,31 +1460,81 @@ function renderWeather(w) {
 
 /* ================= maps ================= */
 let gmapState = null;
+const MODES = [["d", "🚗 Drive", "driving"], ["w", "🚶 Walk", "walking"], ["r", "🚇 Metro / bus", "transit"]];
+S.mode = store.get("ghum.mode", "d");
+const ll = p => `${(+p.lat).toFixed(6)},${(+p.lon).toFixed(6)}`;
+const back = { y: null };
 function showOnMap(t, scroll) {
+  if (scroll && back.y == null) { back.y = window.scrollY; $("#backFab").hidden = false; }
+  if (t.trip) { S.route = t.trip; S.mapChip = null; renderMapChips(); return renderRoute(scroll); }
+  S.route = null; $("#routeBar").hidden = true;
+  if (!t.chip) { S.mapChip = null; renderMapChips(); }
   const f = $("#gmap");
   let src, cap, open;
-  if (t.route) {
-    src = `https://maps.google.com/maps?${qs({ saddr: `${t.from.lat},${t.from.lon}`, daddr: `${t.to.lat},${t.to.lon}`, output: "embed" })}`;
-    cap = `Route: ${t.from.name} → ${t.to.name}`;
-    open = `https://www.google.com/maps/dir/?api=1&${qs({ origin: `${t.from.lat},${t.from.lon}`, destination: `${t.to.lat},${t.to.lon}` })}`;
-  } else if (t.lat != null) {
+  if (t.lat != null) {
     src = `https://maps.google.com/maps?${qs({ q: `${t.lat},${t.lon} (${t.name})`, z: 15, output: "embed" })}`;
     cap = t.name; open = `https://www.google.com/maps/search/?api=1&query=${t.lat},${t.lon}`;
   } else {
-    src = `https://maps.google.com/maps?${qs({ q: t.q, z: radiusKm(S.place) > 20 ? 10 : 12, output: "embed" })}`;
+    const c = t.near || null;
+    src = `https://maps.google.com/maps?${qs({ q: t.q, ...(c ? { ll: ll(c), z: 14 } : { z: radiusKm(S.place) > 20 ? 10 : 12 }), output: "embed" })}`;
     cap = t.name; open = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.q)}`;
   }
   gmapState = t; f.src = src; $("#mapCaption").textContent = cap; $("#openG").href = open;
   if (scroll) { setMapTab("g"); document.getElementById("map").scrollIntoView(); }
 }
+// A route on the Google Map: a whole day's loop, or one leg of it. Metro and bus directions only work one leg at a time.
+function renderRoute(scroll) {
+  const r = S.route; if (!r) return;
+  const m = S.mode, pts = r.pts;
+  if (m === "r" && r.leg < 0) r.leg = 0;
+  if (pts.length === 2) r.leg = 0;
+  const a = r.leg < 0 ? pts[0] : pts[r.leg], z = r.leg < 0 ? pts.slice(1) : [pts[r.leg + 1]];
+  const src = `https://maps.google.com/maps?${qs({ saddr: ll(a), daddr: z.map(ll).join(" to:"), dirflg: m, output: "embed" })}`;
+  const mode = MODES.find(x => x[0] === m)[2];
+  const open = `https://www.google.com/maps/dir/?api=1&${qs({ origin: ll(a), destination: ll(z[z.length - 1]), travelmode: mode })}` + (z.length > 1 ? `&waypoints=${encodeURIComponent(z.slice(0, -1).map(ll).join("|"))}` : "");
+  const legKm = r.leg < 0 ? pts.slice(1).reduce((t, p, i) => t + km(pts[i], p), 0) : km(a, z[0]);
+  $("#gmap").src = src; $("#openG").href = open;
+  $("#mapCaption").textContent = r.leg < 0 ? r.title : `${r.title} · leg ${r.leg + 1}`;
+  const hint = m === "r" ? "Metro and bus directions show one leg at a time. Tap the next leg when you're ready."
+    : m === "w" && legKm > 5 ? `That's about ${fmtKm(legKm)} in straight lines, a long walk. Try Metro / bus for the longer legs.`
+    : `About ${fmtKm(legKm)} in straight lines. Road distance and time are on the map.`;
+  const bar = $("#routeBar");
+  bar.replaceChildren(
+    el("div", { class: "modes" },
+      el("b", { style: "font:700 13px/1.2 var(--f-display);margin-right:4px" }, r.title),
+      ...MODES.map(([k, label]) => el("button", { type: "button", "aria-pressed": m === k, onclick: () => { S.mode = k; store.set("ghum.mode", k); renderRoute(); } }, label)),
+      el("button", { type: "button", style: "margin-left:auto", "aria-label": "Close route", onclick: () => showOnMap({ name: S.place.full || S.place.name, q: S.place.full || S.place.name }) }, "✕")),
+    pts.length > 2 ? el("div", { class: "legs" },
+      el("button", { type: "button", "aria-pressed": r.leg < 0, disabled: m === "r", title: m === "r" ? "Pick one leg for metro and bus" : "", onclick: () => { r.leg = -1; renderRoute(); } }, el("b", {}, "ALL"), "Whole route"),
+      ...pts.slice(0, -1).map((p, i) => el("button", { type: "button", "aria-pressed": r.leg === i, onclick: () => { r.leg = i; renderRoute(); } }, el("b", {}, i + 1), `${p.name} → ${pts[i + 1].name}`))) : null,
+    el("p", { class: "hint" }, hint));
+  bar.hidden = false;
+  bar.querySelector('.legs [aria-pressed="true"]')?.scrollIntoView({ block: "nearest", inline: "center" });
+  if (scroll) { setMapTab("g"); document.getElementById("map").scrollIntoView(); }
+}
+const MAP_CHIPS = [["overview", "Overview", null], ["sights", "⭐ Top sights", "tourist attractions"], ["metro", "🚇 Metro & stations", "metro station"],
+  ["food", "🍽 Food", "restaurants"], ["cafe", "☕ Cafés", "cafes"], ["hotels", "🛏 Hotels", "hotels"], ["atm", "🏧 ATMs", "atm"], ["pharmacy", "💊 Pharmacy", "pharmacy"]];
+function renderMapChips() {
+  const box = $("#mapChips"); if (!S.place) return box.replaceChildren();
+  const b = baseOf(), where = S.base ? `${S.base.name}, ${S.place.name}` : (S.place.full || S.place.name);
+  box.replaceChildren(...MAP_CHIPS.map(([k, label, term]) => el("button", { type: "button", "aria-pressed": S.mapChip === k, onclick: () => {
+    S.mapChip = k; renderMapChips(); setMapTab("g");
+    if (!term) showOnMap({ chip: true, name: S.place.full || S.place.name, q: S.place.full || S.place.name });
+    else showOnMap({ chip: true, name: `${label.replace(/^\S+ /, "")} near ${S.base ? S.base.name : S.place.name}`, q: `${term} near ${where}`, near: b });
+  } }, label)));
+}
+function tripPts(stops) {
+  const b = baseOf(), home = { name: S.base ? S.base.name : `${S.place.name} centre`, lat: b.lat, lon: b.lon };
+  return [home, ...stops.map(p => ({ name: p.name, lat: p.lat, lon: p.lon })), home];
+}
 function routeTo(p) {
   const b = baseOf();
-  showOnMap({ route: true, from: { name: S.base ? S.base.name : S.place.name + " centre", lat: b.lat, lon: b.lon }, to: p }, true);
-  toast(`${fmtKm(km(b, p))} straight line. Road distance and time are on the map.`);
+  showOnMap({ trip: { title: `To ${p.name}`, leg: 0, pts: [{ name: S.base ? S.base.name : S.place.name + " centre", lat: b.lat, lon: b.lon }, { name: p.name, lat: p.lat, lon: p.lon }] } }, true);
 }
+$("#backFab").addEventListener("click", () => { const y = back.y; back.y = null; $("#backFab").hidden = true; if (y != null) window.scrollTo({ top: y, behavior: "smooth" }); });
 function setBase(b) { S.base = b; updateBase(); rerenderDistances(); toast(`Distances now from ${b.name}`); }
 $("#resetBase").addEventListener("click", () => { S.base = null; updateBase(); rerenderDistances(); });
-function updateBase() { $("#baseName").textContent = S.base ? S.base.name : S.place ? `${S.place.name} centre` : "centre"; $("#resetBase").hidden = !S.base; }
+function updateBase() { $("#baseName").textContent = S.base ? S.base.name : S.place ? `${S.place.name} centre` : "centre"; $("#resetBase").hidden = !S.base; renderMapChips(); }
 function rerenderDistances() { renderPlan(); renderMust(); renderOff(); if (S.tiers) renderStays(); renderTrip(); pins.dirty = true; if (!$("#pinmap").hidden) drawPins(); }
 
 const pins = { map: null, layer: null, dirty: true };
@@ -1655,13 +1796,14 @@ function renderPlan() {
       el("header", {}, el("div", {}, el("b", {}, role), el("small", {}, label)), wxCell),
       rainy ? el("p", { class: "tip", style: "margin-top:12px" }, "Rain likely: start with the indoor sights (museums, palaces, temples) on this day.") : null,
       free,
-      stops.length ? el("ol", {}, ...stops.map((p, j) => el("li", { class: p.kind === "off" ? "off" : p.kind === "must" ? "must" : "" },
+      stops.length ? el("ol", {}, ...stops.map((p, j) => el("li", { class: p.kind === "off" ? "off" : p.kind === "must" ? "must" : "", title: "Show this leg on the map", onclick: () => showOnMap({ trip: { title: `${role} · ${label}`, leg: j, pts: tripPts(stops) } }, true) },
         el("div", {}, el("b", {}, p.name), el("small", {}, `${p.kind === "off" ? "Offbeat" : p.kind === "must" ? "Must-see" : "Your pick"} · ${fmtKm(legs[j])} from ${j ? "previous" : "base"}`))))) : null,
       (textDays[textDays.length - 1].route = route, null),
       stops.length ? el("div", { class: "foot" },
         el("span", { class: "dist" }, `≈ ${fmtKm(tot)} round trip`),
         el("button", { class: "btn", type: "button", onclick: () => { stops.forEach(p => { if (!S.trip.some(t => t.id === p.id)) S.trip.push({ id: p.id, name: p.name, lat: p.lat, lon: p.lon, kind: p.kind, place: S.place.name }); }); store.set("ghum.trip", S.trip); renderTrip(); toast(`${role}: ${stops.length} stops added to My trip`); } }, "+ Trip"),
-        el("a", { class: "btn solid", href: route, target: "_blank", rel: "noopener" }, "Day route ↗")) : null);
+        el("button", { class: "btn solid", type: "button", onclick: () => showOnMap({ trip: { title: `${role} · ${label}`, leg: -1, pts: tripPts(stops) } }, true) }, "🗺 Show on map"),
+        el("a", { class: "btn", href: route, target: "_blank", rel: "noopener", "aria-label": "Open day route in Google Maps" }, "↗")) : null);
   }));
 }
 
@@ -1719,6 +1861,45 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catc
   else { flaps("Ghumakkad"); $("#placeSub").textContent = "Couldn't reach the map search. Check your connection and search again."; }
 })();
 window.addEventListener("hashchange", () => { const h = fromHash(); if (h && norm(h.name) !== norm(S.place?.name)) { q.value = h.name; geocode(h.name).then(g => load(g || h)); } });
+
+/* ================= compact card rows ================= */
+// Each card list is one swipeable row; "Show all" turns it back into a grid.
+const ROW_NAMES = { mustGrid: "must-see", offGrid: "hidden spots", areaGrid: "areas", stayGrid: "stays", days: "days", bookGrid: "groups", facts: "guide notes" };
+function rowify(box) {
+  if (box._row) return; box._row = true;
+  const n = el("span", { class: "n" });
+  const all = el("button", { type: "button" }, "Show all");
+  const step = d => box.scrollBy({ left: d * Math.max(260, box.clientWidth * 0.8), behavior: "smooth" });
+  const ctl = el("div", { class: "rowctl" }, n,
+    el("button", { class: "arr", type: "button", "aria-label": "Scroll left", onclick: () => step(-1) }, "‹"),
+    el("button", { class: "arr", type: "button", "aria-label": "Scroll right", onclick: () => step(1) }, "›"), all);
+  all.addEventListener("click", () => { const on = box.classList.toggle("all"); all.textContent = on ? "Show as row" : "Show all"; if (!on) box.scrollLeft = 0; });
+  box.before(ctl);
+  const count = () => {
+    const k = [...box.children].filter(c => !c.matches(".skel,.empty,.err")).length;
+    ctl.hidden = k < 2;
+    n.textContent = `${k} ${ROW_NAMES[box.id] || box.dataset.row || "cards"}${box.classList.contains("all") ? "" : " · swipe"}`;
+  };
+  new MutationObserver(count).observe(box, { childList: true }); count();
+  all.addEventListener("click", count);
+}
+document.querySelectorAll(".rowx").forEach(rowify);
+new MutationObserver(() => document.querySelectorAll(".rowx").forEach(rowify)).observe($("#seeList"), { childList: true, subtree: true });
+
+// a gentle 3D tilt that follows the mouse (touch screens just get the press-in)
+if (matchMedia("(hover:hover) and (pointer:fine)").matches && !matchMedia("(prefers-reduced-motion:reduce)").matches) {
+  const SEL = ".tix,.stay,.area,.day,.bookcard,.gcard,.districts>div";
+  document.addEventListener("pointermove", e => {
+    const c = e.target.closest?.(SEL);
+    if (tilt.cur && tilt.cur !== c) { tilt.cur.classList.remove("tilt"); tilt.cur = null; }
+    if (!c) return;
+    const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+    c.style.setProperty("--ry", `${(x * 7).toFixed(2)}deg`); c.style.setProperty("--rx", `${(-y * 6).toFixed(2)}deg`);
+    c.classList.add("tilt"); tilt.cur = c;
+  }, { passive: true });
+  document.addEventListener("pointerleave", () => { tilt.cur?.classList.remove("tilt"); tilt.cur = null; });
+}
+var tilt = { cur: null };
 </script>
 </body>
 </html>
