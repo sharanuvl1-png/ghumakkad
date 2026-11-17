@@ -6,27 +6,5 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe
-        run: |
-          set +e
-          UA="Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile"
-          SIGHTS='[out:json][timeout:20];(nwr(around:25000,25.2048,55.2708)["tourism"="viewpoint"]["name"];nwr(around:25000,25.2048,55.2708)["natural"~"^(waterfall|cave_entrance|hot_spring|beach|peak|arch)$"]["name"];nwr(around:25000,25.2048,55.2708)["waterway"="waterfall"]["name"];nwr(around:25000,25.2048,55.2708)["historic"~"^(ruins|fort|archaeological_site|castle|city_gate)$"]["name"];nwr(around:25000,25.2048,55.2708)["tourism"~"^(attraction|museum)$"]["name"];);out center 300;'
-          STAYS='[out:json][timeout:20];nwr(around:12000,25.2048,55.2708)["tourism"~"^(hotel|guest_house|hostel|resort|motel|apartment|chalet|camp_site|alpine_hut)$"]["name"];out center 500;'
-          for ep in https://overpass-api.de/api/interpreter https://overpass.kumi.systems/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter; do
-            for q in "$SIGHTS" "$STAYS"; do
-              s=$(date +%s.%N)
-              curl -s -m 30 -A "$UA" -H "Origin: https://sharanuvl1-png.github.io" -H "Referer: https://sharanuvl1-png.github.io/ghumakkad/" -D h.txt -o b.txt -w "%{http_code}" --data-urlencode "data=$q" "$ep" > code.txt
-              e=$(date +%s.%N)
-              echo "$ep code=$(cat code.txt) time=$(echo "$e-$s"|bc) bytes=$(wc -c <b.txt) els=$(grep -o '"type"' b.txt | wc -l) acao=$(grep -i access-control-allow-origin h.txt | tr -d '\r')"
-              head -c 200 b.txt | tr '\n' ' '; echo
-            done
-          done
-          echo "== Wikidata hotels near Dubai"
-          SP='SELECT ?h ?hLabel ?loc ?stars WHERE { SERVICE wikibase:around { ?h wdt:P625 ?loc . bd:serviceParam wikibase:center "Point(55.2708 25.2048)"^^geo:wktLiteral . bd:serviceParam wikibase:radius "12" . } ?h wdt:P31/wdt:P279* wd:Q27686 . OPTIONAL { ?h wdt:P2436 ?stars } SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } LIMIT 50'
-          s=$(date +%s.%N); curl -s -m 40 -A "$UA" -H "Origin: https://sharanuvl1-png.github.io" -D h.txt -o b.txt -w "code=%{http_code}" -G --data-urlencode "query=$SP" -H "Accept: application/sparql-results+json" https://query.wikidata.org/sparql; e=$(date +%s.%N); echo " time=$(echo "$e-$s"|bc) bindings=$(grep -o '"hLabel"' b.txt | wc -l) acao=$(grep -i access-control-allow-origin h.txt | tr -d '\r')"
-          echo "== Wikivoyage Dubai sections"
-          curl -s -m 20 "https://en.wikivoyage.org/w/api.php?action=parse&page=Dubai&prop=sections|links&format=json&formatversion=2&origin=*" | python3 -c "import json,sys; d=json.load(sys.stdin)['parse']; print([s['line'] for s in d['sections']][:30]); print([l['title'] for l in d['links'] if l['title'].startswith('Dubai/')][:20])"
-          echo "== Wikivoyage Dubai html heading structure"
-          curl -s -m 20 "https://en.wikivoyage.org/w/api.php?action=parse&page=Dubai&prop=text&format=json&formatversion=2&origin=*&disableeditsection=1" | python3 -c "import json,sys,re; h=json.load(sys.stdin)['parse']['text']; print(len(h)); print(re.findall(r'<(section|div class=\"mw-heading[^\"]*\"|h2)[^>]*>', h)[:12]); i=h.find('id=\"Districts\"'); print(h[i-200:i+1500])"
-          echo "== Wikivoyage Hampi sleep listing sample"
-          curl -s -m 20 "https://en.wikivoyage.org/w/api.php?action=parse&page=Hampi&prop=text&format=json&formatversion=2&origin=*&disableeditsection=1" | python3 -c "import json,sys,re; h=json.load(sys.stdin)['parse']['text']; i=h.find('id=\"Sleep\"'); print(h[i:i+2500])"
+      - uses: actions/checkout@v4
+      - run: python3 .github/probe.py
