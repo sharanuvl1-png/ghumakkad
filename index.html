@@ -196,6 +196,30 @@ h3{font:700 18px/1.2 var(--f-display);margin:0}
 .leg button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:18px}
 .total{font:700 13px/1.4 var(--f-mono)}
 
+/* planner */
+.planner{display:grid;gap:10px}
+.dates{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.dates label{display:grid;gap:4px;font:700 10px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);min-width:0;flex:1 1 140px}
+.dates input,.dates select{border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:10px 12px;font:500 15px/1.2 var(--f-body);color:var(--fg);letter-spacing:0;text-transform:none;width:100%}
+.daycount{flex:1 1 140px;display:grid;align-content:end}
+.daycount b{font:800 34px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.daycount span{font-size:12px;color:var(--muted)}
+.days{display:grid;gap:14px;margin-top:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.day{background:var(--card);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.day header{background:var(--night);color:var(--on-night);padding:12px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.day header b{font:800 20px/1 var(--f-display)}
+.day header small{display:block;font:500 12px/1.3 var(--f-mono);color:#b9bce8;margin-top:4px}
+.day .wxb{font:700 13px/1.2 var(--f-mono);text-align:right;white-space:nowrap}
+.day ol{list-style:none;margin:0;padding:12px 16px;display:grid;gap:10px;counter-reset:st}
+.day li{display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start}
+.day li::before{counter-increment:st;content:counter(st);width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:700 12px/1 var(--f-mono);background:var(--chip)}
+.day li.must::before{background:var(--marigold);color:var(--on-accent)}
+.day li.off::before{background:var(--coral);color:#fff}
+.day li b{font-weight:600}
+.day li small{display:block;color:var(--muted);font-size:12px}
+.day .foot{margin-top:auto;border-top:2px dashed var(--line);padding:10px 16px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.day .tip{margin:0 16px 4px;padding:8px 10px;border-radius:10px;background:var(--chip);font-size:12px}
+
 /* states */
 .skel{border-radius:18px;background:linear-gradient(90deg,var(--chip),var(--card),var(--chip));background-size:200% 100%;animation:sh 1.2s infinite;min-height:180px}
 @keyframes sh{to{background-position:-200% 0}}
@@ -241,6 +265,7 @@ footer p{max-width:80ch;margin:6px 0}
   <div class="wrap">
     <a href="#overview"><i style="background:var(--night-2)"></i>Overview</a>
     <a href="#map"><i style="background:var(--sky)"></i>Map &amp; distances</a>
+    <a href="#plan"><i style="background:var(--night-2)"></i>Day-by-day plan</a>
     <a href="#must"><i style="background:var(--marigold)"></i>Must-see</a>
     <a href="#offbeat"><i style="background:var(--coral)"></i>Offbeat</a>
     <a href="#where"><i style="background:var(--sea)"></i>Where to stay</a>
@@ -291,9 +316,26 @@ footer p{max-width:80ch;margin:6px 0}
     </div>
   </section>
 
+  <section id="plan">
+    <div class="sec-head">
+      <h2><span class="tag" style="color:var(--muted)">03 · Your dates</span>Day-by-day plan</h2>
+      <p class="note">Pick your dates. Each day gets sights that are close to each other, in the shortest order from your base.</p>
+    </div>
+    <div class="panel planner">
+      <div class="dates">
+        <label for="dFrom">Arrive<input type="date" id="dFrom"></label>
+        <label for="dTo">Leave<input type="date" id="dTo"></label>
+        <label for="pace">Pace<select id="pace"><option value="relaxed">Relaxed (3/day)</option><option value="balanced" selected>Balanced (4/day)</option><option value="packed">Packed (6/day)</option></select></label>
+        <div class="daycount" id="dayCount" aria-live="polite"></div>
+      </div>
+      <p class="src" id="planNote"></p>
+    </div>
+    <div class="days" id="days"></div>
+  </section>
+
   <section id="must">
     <div class="sec-head">
-      <h2><span class="tag k-must">03 · Don't miss</span>Must-see places</h2>
+      <h2><span class="tag k-must">04 · Don't miss</span>Must-see places</h2>
       <p class="note">Ranked by how many people read about each spot on Wikipedia in the last 30 days.</p>
     </div>
     <div class="grid" id="mustGrid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
@@ -302,7 +344,7 @@ footer p{max-width:80ch;margin:6px 0}
 
   <section id="offbeat">
     <div class="sec-head">
-      <h2><span class="tag k-off">04 · Off the beaten path</span>Offbeat &amp; hidden spots</h2>
+      <h2><span class="tag k-off">05 · Off the beaten path</span>Offbeat &amp; hidden spots</h2>
       <div class="chips" id="offChips"></div>
     </div>
     <p class="note" style="margin:-4px 0 14px">Quieter sights: places with few Wikipedia readers, plus viewpoints, waterfalls, caves, ruins and peaks that locals have mapped on OpenStreetMap but that have no Wikipedia page at all.</p>
@@ -311,7 +353,7 @@ footer p{max-width:80ch;margin:6px 0}
 
   <section id="where">
     <div class="sec-head">
-      <h2><span class="tag k-stay">05 · Base camp</span>Which part to stay in</h2>
+      <h2><span class="tag k-stay">06 · Base camp</span>Which part to stay in</h2>
       <p class="note">Areas with the most places to stay that are also closest to the must-see sights.</p>
     </div>
     <div class="grid" id="areaGrid"><div class="skel"></div><div class="skel"></div></div>
@@ -320,7 +362,7 @@ footer p{max-width:80ch;margin:6px 0}
 
   <section id="stays">
     <div class="sec-head">
-      <h2><span class="tag k-stay">06 · Sleep well</span>Best stays</h2>
+      <h2><span class="tag k-stay">07 · Sleep well</span>Best stays</h2>
       <div class="tiers" id="tiers"></div>
     </div>
     <p class="note" id="staysNote" style="margin:-4px 0 14px"></p>
@@ -330,7 +372,7 @@ footer p{max-width:80ch;margin:6px 0}
 
   <section id="trip">
     <div class="sec-head">
-      <h2><span class="tag" style="color:var(--sky)">07 · Your plan</span>My trip</h2>
+      <h2><span class="tag" style="color:var(--sky)">08 · Your plan</span>My trip</h2>
       <div class="chips"><button class="btn" type="button" id="optimise">Shortest order</button><button class="btn" type="button" id="clearTrip">Clear</button></div>
     </div>
     <div class="trip" id="tripList"></div>
@@ -501,7 +543,8 @@ async function load(p) {
   const token = ++S.token;
   const live = () => token === S.token;
   S.place = p; S.centre = { name: "centre of " + p.name, lat: p.lat, lon: p.lon }; S.base = null;
-  S.must = []; S.off = []; S.stays = []; S.areas = []; S.wv = null;
+  S.must = []; S.off = []; S.stays = []; S.areas = []; S.wv = null; S.wx = null;
+  $("#days").replaceChildren(el("div", { class: "skel" }), el("div", { class: "skel" }));
   document.title = `${p.name} · Ghumakkad`;
   $("#placeTitle").textContent = p.name;
   $("#boardLabel").textContent = "Now boarding · " + (p.country || "");
@@ -536,6 +579,7 @@ async function load(p) {
   await buildAreas(osm, live);
   if (!live()) return;
   renderAreas();
+  renderPlan();
   pins.dirty = true; if (!$("#pinmap").hidden) drawPins();
 }
 function radiusKm(p) {
@@ -1000,14 +1044,15 @@ function renderFacts(v) {
   }).filter(Boolean));
 }
 async function weather(p) {
-  return getJSON(`https://api.open-meteo.com/v1/forecast?${qs({ latitude: p.lat, longitude: p.lon, daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max", current: "temperature_2m,weather_code", timezone: "auto", forecast_days: 7 })}`, {}, 12000);
+  return getJSON(`https://api.open-meteo.com/v1/forecast?${qs({ latitude: p.lat, longitude: p.lon, daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max", current: "temperature_2m,weather_code", timezone: "auto", forecast_days: 16 })}`, {}, 12000);
 }
 const WX = c => c === 0 ? ["☀️", "Clear"] : c <= 2 ? ["🌤️", "Partly cloudy"] : c === 3 ? ["☁️", "Cloudy"] : c <= 48 ? ["🌫️", "Fog"] : c <= 57 ? ["🌦️", "Drizzle"] : c <= 67 ? ["🌧️", "Rain"] : c <= 77 ? ["❄️", "Snow"] : c <= 82 ? ["🌧️", "Showers"] : c <= 86 ? ["🌨️", "Snow showers"] : ["⛈️", "Thunderstorm"];
 function renderWeather(w) {
   const box = $("#wx");
   if (!w?.daily) { box.replaceChildren(el("p", { class: "note", style: "grid-column:1/-1" }, "Forecast unavailable right now.")); return; }
+  S.wx = w; renderPlan();
   const d = w.daily;
-  box.replaceChildren(...d.time.map((t, i) => {
+  box.replaceChildren(...d.time.slice(0, 7).map((t, i) => {
     const [ico, lbl] = WX(d.weather_code[i]);
     const day = new Date(t + "T12:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric" });
     return el("div", { title: lbl }, el("b", {}, day), el("div", { class: "ico", "aria-label": lbl }, ico),
@@ -1048,7 +1093,7 @@ function routeTo(p) {
 function setBase(b) { S.base = b; updateBase(); rerenderDistances(); toast(`Distances now from ${b.name}`); }
 $("#resetBase").addEventListener("click", () => { S.base = null; updateBase(); rerenderDistances(); });
 function updateBase() { $("#baseName").textContent = S.base ? S.base.name : S.place ? `${S.place.name} centre` : "centre"; $("#resetBase").hidden = !S.base; }
-function rerenderDistances() { renderMust(); renderOff(); if (S.tiers) renderStays(); renderTrip(); pins.dirty = true; if (!$("#pinmap").hidden) drawPins(); }
+function rerenderDistances() { renderPlan(); renderMust(); renderOff(); if (S.tiers) renderStays(); renderTrip(); pins.dirty = true; if (!$("#pinmap").hidden) drawPins(); }
 
 const pins = { map: null, layer: null, dirty: true };
 function setMapTab(w) {
@@ -1133,6 +1178,123 @@ function errBox(msg, retry) {
   return el("div", { class: "err" }, el("span", {}, msg), el("button", { class: "btn", type: "button", onclick: retry }, "Try again"));
 }
 
+/* ================= day-by-day planner ================= */
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const parseD = v => { const [y, m, d] = (v || "").split("-").map(Number); return y ? new Date(y, m - 1, d) : null; };
+(function initDates() {
+  const saved = store.get("ghum.dates", null);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let a = parseD(saved?.from), b = parseD(saved?.to);
+  if (!a || !b || b < today) { a = new Date(today); a.setDate(a.getDate() + ((5 - a.getDay() + 7) % 7 || 7)); b = new Date(a); b.setDate(b.getDate() + 2); }
+  $("#dFrom").value = iso(a); $("#dTo").value = iso(b); $("#dFrom").min = iso(today);
+  if (saved?.pace) $("#pace").value = saved.pace;
+  const onChange = e => {
+    let f = parseD($("#dFrom").value), t = parseD($("#dTo").value);
+    if (f && (!t || t < f)) { t = new Date(f); if (e?.target.id === "dFrom") { t.setDate(t.getDate() + Math.max(0, S.lastSpan || 2)); } $("#dTo").value = iso(t); }
+    $("#dTo").min = $("#dFrom").value;
+    store.set("ghum.dates", { from: $("#dFrom").value, to: $("#dTo").value, pace: $("#pace").value });
+    renderPlan();
+  };
+  ["dFrom", "dTo", "pace"].forEach(id => $("#" + id).addEventListener("change", onChange));
+})();
+function planDays() {
+  const f = parseD($("#dFrom").value), t = parseD($("#dTo").value);
+  if (!f || !t) return [];
+  const n = Math.round((t - f) / 864e5) + 1;
+  S.lastSpan = n - 1;
+  return Array.from({ length: Math.min(Math.max(n, 1), 21) }, (_, i) => { const d = new Date(f); d.setDate(d.getDate() + i); return d; });
+}
+function angleSplit(points, base, sizes) {
+  // group places by direction from the base, so each day stays in one part of the area
+  const sorted = points.slice().sort((a, b) => Math.atan2(a.lat - base.lat, a.lon - base.lon) - Math.atan2(b.lat - base.lat, b.lon - base.lon));
+  // start the sweep at the widest gap so a group never straddles it
+  let cut = 0, gap = -1;
+  for (let i = 0; i < sorted.length; i++) {
+    const a1 = Math.atan2(sorted[i].lat - base.lat, sorted[i].lon - base.lon);
+    const a0 = Math.atan2(sorted[(i - 1 + sorted.length) % sorted.length].lat - base.lat, sorted[(i - 1 + sorted.length) % sorted.length].lon - base.lon);
+    const g = (a1 - a0 + 2 * Math.PI) % (2 * Math.PI);
+    if (g > gap) { gap = g; cut = i; }
+  }
+  const ring = sorted.slice(cut).concat(sorted.slice(0, cut));
+  const out = []; let k = 0;
+  for (const sz of sizes) { out.push(ring.slice(k, k + sz)); k += sz; }
+  return out;
+}
+function orderLoop(base, pts) {
+  let cur = base; const left = pts.slice(), out = [];
+  while (left.length) { left.sort((a, b) => km(cur, a) - km(cur, b)); cur = left.shift(); out.push(cur); }
+  return out;
+}
+function renderPlan() {
+  const box = $("#days");
+  const days = planDays();
+  const n = days.length;
+  $("#dayCount").replaceChildren(el("b", {}, n), el("span", {}, n === 1 ? "day" : `days · ${n - 1} night${n === 2 ? "" : "s"}`));
+  if (!S.place || (!S.must.length && !S.off.length)) {
+    if (S.place && S.must && S.off && !S.must.length && !S.off.length && !box.querySelector(".skel")) box.replaceChildren(el("div", { class: "empty" }, "No sights found to plan with here yet. Try a nearby town or a wider region."));
+    return;
+  }
+  const base = baseOf();
+  const per = { relaxed: 3, balanced: 4, packed: 6 }[$("#pace").value] || 4;
+  const caps = days.map((_, i) => n >= 3 && (i === 0 || i === n - 1) ? Math.max(2, per - 2) : n === 2 && i === 1 ? Math.max(2, per - 2) : per);
+  const want = caps.reduce((a, b) => a + b, 0);
+  // what goes in: places you added to My trip, then must-sees by popularity, then offbeat spots by distance
+  const picked = [], seen = new Set();
+  const add = (p, kind) => { if (p.lat == null || seen.has(p.id) || seen.has(norm(p.name))) return; seen.add(p.id); seen.add(norm(p.name)); picked.push({ ...p, kind: p.kind || kind }); };
+  S.trip.filter(t => !t.place || t.place === S.place.name).filter(t => t.kind !== "stay").forEach(t => add(t, "trip"));
+  const offN = Math.max(1, Math.round(want * 0.3));
+  const offs = S.off.slice().sort((a, b) => km(base, a) - km(base, b));
+  S.must.slice(0, Math.max(0, want - offN)).forEach(p => add(p, "must"));
+  offs.forEach(p => { if (picked.length < want) add(p, "off"); });
+  S.must.forEach(p => { if (picked.length < want) add(p, "must"); });
+  const pts = picked.slice(0, want);
+  // arrival and departure days stay close to your base; the rest are grouped by direction
+  const near = pts.slice().sort((a, b) => km(base, a) - km(base, b));
+  const plan = days.map(() => []);
+  const light = n >= 2 ? (n >= 3 ? [0, n - 1] : [1]) : [];
+  for (const i of light) for (let j = 0; j < caps[i] && near.length; j++) { const p = near.shift(); plan[i].push(p); }
+  const usedL = new Set(plan.flat().map(p => p.id));
+  const rest = pts.filter(p => !usedL.has(p.id));
+  const fullIdx = days.map((_, i) => i).filter(i => !light.includes(i));
+  if (fullIdx.length) {
+    const sizes = fullIdx.map(i => caps[i]);
+    const total = sizes.reduce((a, b) => a + b, 0);
+    const scaled = sizes.map(s => Math.floor(s * rest.length / total));
+    let extra = rest.length - scaled.reduce((a, b) => a + b, 0);
+    for (let i = 0; extra > 0; i = (i + 1) % scaled.length, extra--) scaled[i]++;
+    angleSplit(rest, base, scaled).forEach((g, k) => plan[fullIdx[k]].push(...g));
+  }
+  const wx = S.wx?.daily;
+  const goNext = (() => { const s = sec(S.wv, "go next"); return s ? listings([...s.nodes, ...s.subs.flatMap(x => x.nodes)]) : []; })();
+  let gi = 0;
+  $("#planNote").textContent = `${pts.length} places across ${n} day${n > 1 ? "s" : ""}, from ${S.base ? S.base.name : S.place.name + " centre"}. Arrival and departure days are kept light and close to your base. Distances are straight-line; check opening days before you go.`;
+  box.replaceChildren(...days.map((d, i) => {
+    const stops = orderLoop(base, plan[i]);
+    let prev = base, tot = 0;
+    const legs = stops.map(p => { const k = km(prev, p); tot += k; prev = p; return k; });
+    if (stops.length) tot += km(prev, base);
+    const label = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+    const role = n > 1 && i === 0 ? "Arrival day" : n > 1 && i === n - 1 ? "Departure day" : `Day ${i + 1}`;
+    const wi = wx ? wx.time.indexOf(iso(d)) : -1;
+    const wxCell = wi >= 0 ? el("div", { class: "wxb", title: WX(wx.weather_code[wi])[1] }, `${WX(wx.weather_code[wi])[0]} ${Math.round(wx.temperature_2m_max[wi])}°`, el("small", {}, wx.precipitation_probability_max?.[wi] != null ? `${wx.precipitation_probability_max[wi]}% rain` : "")) : el("div", { class: "wxb" }, el("small", {}, "Forecast closer to the date"));
+    const rainy = wi >= 0 && (wx.precipitation_probability_max?.[wi] ?? 0) >= 60;
+    let free = null;
+    if (!stops.length) { const g = goNext[gi++]; free = el("div", { class: "tip", style: "margin-top:12px" }, g ? `Free day. Idea for a day trip: ${g.name}${g.text ? ". " + g.text.slice(0, 160) : ""}` : "Free day. Revisit a favourite, or explore the Offbeat list for a day trip."); }
+    const way = stops.map(p => `${p.lat},${p.lon}`).join("|");
+    const route = stops.length ? `https://www.google.com/maps/dir/?api=1&${qs({ origin: `${base.lat},${base.lon}`, destination: `${base.lat},${base.lon}`, travelmode: "driving" })}&waypoints=${encodeURIComponent(way)}` : null;
+    return el("article", { class: "day" },
+      el("header", {}, el("div", {}, el("b", {}, role), el("small", {}, label)), wxCell),
+      rainy ? el("p", { class: "tip", style: "margin-top:12px" }, "Rain likely: start with the indoor sights (museums, palaces, temples) on this day.") : null,
+      free,
+      stops.length ? el("ol", {}, ...stops.map((p, j) => el("li", { class: p.kind === "off" ? "off" : p.kind === "must" ? "must" : "" },
+        el("div", {}, el("b", {}, p.name), el("small", {}, `${p.kind === "off" ? "Offbeat" : p.kind === "must" ? "Must-see" : "Your pick"} · ${fmtKm(legs[j])} from ${j ? "previous" : "base"}`))))) : null,
+      stops.length ? el("div", { class: "foot" },
+        el("span", { class: "dist" }, `≈ ${fmtKm(tot)} round trip`),
+        el("button", { class: "btn", type: "button", onclick: () => { stops.forEach(p => { if (!S.trip.some(t => t.id === p.id)) S.trip.push({ id: p.id, name: p.name, lat: p.lat, lon: p.lon, kind: p.kind, place: S.place.name }); }); store.set("ghum.trip", S.trip); renderTrip(); toast(`${role}: ${stops.length} stops added to My trip`); } }, "+ Trip"),
+        el("a", { class: "btn solid", href: route, target: "_blank", rel: "noopener" }, "Day route ↗")) : null);
+  }));
+}
+
 /* ================= theme + boot ================= */
 (function theme() {
   const saved = store.get("ghum.theme", null);
@@ -1153,7 +1315,7 @@ function fromHash() {
   return null;
 }
 (async function boot() {
-  renderTrip();
+  renderTrip(); renderPlan();
   const h = fromHash();
   if (h) { q.value = h.name; const g = await geocode(h.name); return load(g && km(g, h) < 30 ? g : h); }
   const last = store.get("ghum.last", null);
